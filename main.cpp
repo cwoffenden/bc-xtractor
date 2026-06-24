@@ -185,9 +185,9 @@ void dumpBoundRedChannel(bool eight = false) {
 }
 
 void bc3RedTest() {
-	BCBlock block[2] = {{/*unused alpha*/}, {0x00, 0x00, 0x00, 0x00, 0xE4, 0xE4, 0xE4, 0xE4}};
+	BCBlock block[2] = {{/*unused alpha*/}, {0x00, 0x00, 0x00, 0x00, 0xE4, 0x39, 0x4E, 0x93}};
 	block[1].bc1.endpt[0].r = 31;
-	block[1].bc1.endpt[1].r =  8;
+	block[1].bc1.endpt[1].r =  0;
 
 	GLuint txName = 0;
 	glGenTextures(1, &txName);
@@ -200,9 +200,9 @@ void bc3RedTest() {
 }
 
 void bc4RedTest() {
-	BCBlock block[1] = {{0x00, 0x00, 0x88, 0xC6, 0xFA, 0x88, 0xC6, 0xFA}};
+	BCBlock block[1] = {{0x00, 0x00, 0x88, 0xC6, 0xFA, 0x77, 0x39, 0x05}};
 	block[0].bc4.endpt[0] = 255;
-	block[0].bc4.endpt[1] =  64;
+	block[0].bc4.endpt[1] =   0;
 
 	GLuint txName = 0;
 	glGenTextures(1, &txName);
