@@ -218,16 +218,86 @@ void filterClampBoilerplate() {
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 }
 
-void bc3RedTest() {
-	BCBlock block[2] = {{/*unused alpha*/}, {0x00, 0x00, 0x00, 0x00, 0xE4, 0x39, 0x4E, 0x93}};
+/**
+ * Creates a 4x4 red-only uncompressed 8-bit texture with ideal BC3 values.
+ *
+ * \param[in] txId pre-generated texture ID to use
+ */
+void create4x4RedBC3Vals(GLuint txId) {
+	assert(txId);
+	glBindTexture(GL_TEXTURE_2D, txId);
+	uint8_t const block[16] = {
+		0xFF, 0x00, 0xAA, 0x55,
+		0x00, 0xAA, 0x55, 0xFF,
+		0xAA, 0x55, 0xFF, 0x00,
+		0x55, 0xFF, 0x00, 0xAA
+	};
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, 4, 4, 0, GL_RED, GL_UNSIGNED_BYTE, block);
+	filterClampBoilerplate();
+}
+
+/**
+ * Creates a 4x4 red-only uncompressed 8-bit texture with ideal BC4 values.
+ *
+ * \param[in] txId pre-generated texture ID to use
+ */
+void create4x4RedBC4Vals(GLuint txId) {
+	assert(txId);
+	glBindTexture(GL_TEXTURE_2D, txId);
+	uint8_t const block[16] = {
+		0xFF, 0x00, 0xDB, 0xB6,
+		0x92, 0x6D, 0x49, 0x24,
+		0x24, 0x49, 0x6D, 0x92,
+		0xB6, 0xDB, 0x00, 0xFF
+	};
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, 4, 4, 0, GL_RED, GL_UNSIGNED_BYTE, block);
+	filterClampBoilerplate();
+}
+
+/**
+ * Creates a 4x4 compressed BC3 texture.
+ *
+ * \param[in] txId pre-generated texture ID to use
+ */
+void create4x4RedBC3(GLuint txId) {
+	assert(txId);
+	glBindTexture(GL_TEXTURE_2D, txId);
+	BCBlock block[2] = {{/*unused alpha*/}, {
+		0x00, 0x00,
+		0x00, 0x00,
+		0xE4, 0x39,
+		0x4E, 0x93}
+	};
 	block[1].bc1.endpt[0].r = 31;
 	block[1].bc1.endpt[1].r =  0;
-
-	GLuint txName = 0;
-	glGenTextures(1, &txName);
-	glBindTexture(GL_TEXTURE_2D, txName);
 	glCompressedTexImage2D(GL_TEXTURE_2D, 0, GL_COMPRESSED_RGBA_S3TC_DXT3_EXT, 4, 4, 0, 16, block);
 	filterClampBoilerplate();
+}
+
+/**
+ * Creates a 4x4 compressed BC4 texture.
+ *
+ * \param[in] txId pre-generated texture ID to use
+ */
+void create4x4RedBC4(GLuint txId) {
+	assert(txId);
+	glBindTexture(GL_TEXTURE_2D, txId);
+	BCBlock block[1] = {{
+		0x00,
+		0x00,
+		0x88, 0xC6, 0xFA,
+		0x77, 0x39, 0x05
+	}};
+	block[0].bc4.endpt[0] = 255;
+	block[0].bc4.endpt[1] =   0;
+	glCompressedTexImage2D(GL_TEXTURE_2D, 0, GL_COMPRESSED_RED_RGTC1, 4, 4, 0, 8, block);
+	filterClampBoilerplate();
+}
+
+void bc3RedTest() {
+	GLuint txName = 0;
+	glGenTextures(1, &txName);
+	create4x4RedBC3(txName);
 
 	dumpBoundChannelData(false);
 
@@ -236,30 +306,31 @@ void bc3RedTest() {
 }
 
 void bc4RedTest() {
-	BCBlock block[1] = {{0x00, 0x00, 0x88, 0xC6, 0xFA, 0x77, 0x39, 0x05}};
-	block[0].bc4.endpt[0] = 255;
-	block[0].bc4.endpt[1] =   0;
-
 	GLuint txName = 0;
 	glGenTextures(1, &txName);
-	glBindTexture(GL_TEXTURE_2D, txName);
-	glCompressedTexImage2D(GL_TEXTURE_2D, 0, GL_COMPRESSED_RED_RGTC1, 4, 4, 0, 8, block);
-	filterClampBoilerplate();
-	
+	create4x4RedBC4(txName);
+
 	dumpBoundChannelData(true);
 
 	glBindTexture(GL_TEXTURE_2D, 0);
 	glDeleteTextures(1, &txName);
 }
 
-void red8Test() {
-	uint8_t const block[16] = {0xFF, 0x00, 0xDB, 0xB6, 0x92, 0x6D, 0x49, 0x24};
-
+void bc3Red8ValTest() {
 	GLuint txName = 0;
 	glGenTextures(1, &txName);
-	glBindTexture(GL_TEXTURE_2D, txName);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, 4, 4, 0, GL_RED, GL_UNSIGNED_BYTE, block);
-	filterClampBoilerplate();
+	create4x4RedBC3Vals(txName);
+
+	dumpBoundChannelData(true);
+
+	glBindTexture(GL_TEXTURE_2D, 0);
+	glDeleteTextures(1, &txName);
+}
+
+void bc4Red8ValTest() {
+	GLuint txName = 0;
+	glGenTextures(1, &txName);
+	create4x4RedBC4Vals(txName);
 
 	dumpBoundChannelData(true);
 
@@ -386,8 +457,8 @@ enum VertexID {
 	VERT_TEX1_ID = 2, /**< Vertex texture channel channel 1. */
 };
 
-GLchar const vertShaderTexture[] =
-	//"#version 330 core\n"
+GLchar const vertShaderTexture120[] =
+	"#version 120\n"
 	"attribute vec2 aPosn;"
 	"attribute vec2 aTex0;"
 	"varying vec2 vPosn;"
@@ -398,9 +469,8 @@ GLchar const vertShaderTexture[] =
 	"	gl_Position = vec4(aPosn.x, aPosn.y, 0.0, 1.0);\n"
 	"}\n";
 
-GLchar const fragShaderTexture[] =
-	//"#version 330 core\n"
-    //"out vec4 FragColor;\n"
+GLchar const fragShaderTexture120[] =
+	"#version 120\n"
 	"uniform sampler2D srcTx;"
 	"varying vec2 vPosn;"
 	"varying vec2 vTex0;"
@@ -463,19 +533,11 @@ void initFramebufferTest() {
 	assert(glGetError() == 0);
 #endif
 
-	createVertFragShaders(vertShaderTexture, fragShaderTexture);
+	createVertFragShaders(vertShaderTexture120, fragShaderTexture120);
 
-	uint8_t const block[16] = {
-		0xFF, 0x00, 0xDB, 0xB6,
-		0x92, 0x6D, 0x49, 0x24,
-		0x24, 0x49, 0x6D, 0x92,
-		0xB6, 0xDB, 0x00, 0xFF
-	};
 	GLuint txName = 0;
 	glGenTextures(1, &txName);
-	glBindTexture(GL_TEXTURE_2D, txName);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, 4, 4, 0, GL_RED, GL_UNSIGNED_BYTE, block);
-	filterClampBoilerplate();
+	create4x4RedBC4(txName);
 
 	float const verts[]= {
 		 1.0f,  1.0f, 1.0f, 1.0f, // TR
@@ -524,20 +586,29 @@ void setup() {
 	glDebugMessageCallback(debugCallback, NULL);
 	glEnable(GL_DEBUG_OUTPUT);
 #endif
+	/*
+	 * Note so far: these pure 'val' tests are wrong, compared with the control
+	 * values, but the float framebuffer ones are correct. They're only slightly
+	 * out, but the takeaway is glGetTexImage() from a bound texture gives
+	 * different results than drawing to a float framebuffer (which matches
+	 * compute shader).
+	 */
 	//bc3RedTest();
 	//bc4RedTest();
-	//red8Test();
+	//bc4Red8ValTest();
 	//computeTest();
 	initFramebufferTest();
 	drawFramebufferTest();
 	/*
+	printf("Control 0xAA: 0x%08X (%0.8f)\n", floatBits(0xAA / 255.0f), 0xAA / 255.0f);
+	printf("Control 0x55: 0x%08X (%0.8f)\n", floatBits(0x55 / 255.0f), 0x55 / 255.0f);
+	 */
 	printf("Control 0xDB: 0x%08X (%0.8f)\n", floatBits(0xDB / 255.0f), 0xDB / 255.0f);
 	printf("Control 0xB6: 0x%08X (%0.8f)\n", floatBits(0xB6 / 255.0f), 0xB6 / 255.0f);
 	printf("Control 0x92: 0x%08X (%0.8f)\n", floatBits(0x92 / 255.0f), 0x92 / 255.0f);
 	printf("Control 0x6D: 0x%08X (%0.8f)\n", floatBits(0x6D / 255.0f), 0x6D / 255.0f);
 	printf("Control 0x49: 0x%08X (%0.8f)\n", floatBits(0x49 / 255.0f), 0x49 / 255.0f);
 	printf("Control 0x24: 0x%08X (%0.8f)\n", floatBits(0xB6 / 255.0f), 0x24 / 255.0f);
-	 */
 }
 
 void draw(GLFWwindow* window) {
