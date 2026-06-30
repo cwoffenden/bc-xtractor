@@ -15,6 +15,12 @@
 #define GL_COMPRESSED_RGBA_S3TC_DXT3_EXT 0x83F2
 #endif
 
+/**
+ * \def DEBUG_DRAW_QUAD
+ * Define this to draw the non-compute path to screen.
+ */
+//#define DEBUG_DRAW_QUAD
+
 struct BCBlock {
 	union {
 		uint8_t raw[8];
@@ -368,31 +374,82 @@ void computeTest() {
 
 	glDeleteTextures(1, &srcTxName);
 	glDeleteTextures(1, &dstTxName);
-
-	printf("Control 0xAA: 0x%08X (%0.8f)\n", floatBits(0xAA / 255.0f), 0xAA / 255.0f);
-	printf("Control 0x55: 0x%08X (%0.8f)\n", floatBits(0x55 / 255.0f), 0x55 / 255.0f);
 }
 #endif
 
+/**
+ * Vertex attribute IDs.
+ */
+enum VertexID {
+	VERT_POSN_ID = 0, /**< Vertex positions. */
+	VERT_TEX0_ID = 1, /**< Vertex texture channel channel 0. */
+	VERT_TEX1_ID = 2, /**< Vertex texture channel channel 1. */
+};
+
 GLchar const vertShaderTexture[] =
-	"#version 330 core\n"
-	"uniform sampler2D srcTx;"
-	"in vec2 aPosn;"
+	//"#version 330 core\n"
+	"attribute vec2 aPosn;"
+	"attribute vec2 aTex0;"
+	"varying vec2 vPosn;"
+	"varying vec2 vTex0;"
 	"void main() {\n"
+	"	vPosn = aPosn;"
+	"	vTex0 = aTex0;"
 	"	gl_Position = vec4(aPosn.x, aPosn.y, 0.0, 1.0);\n"
 	"}\n";
 
 GLchar const fragShaderTexture[] =
-	"#version 330 core\n"
-    "out vec4 FragColor;\n"
+	//"#version 330 core\n"
+    //"out vec4 FragColor;\n"
+	"uniform sampler2D srcTx;"
+	"varying vec2 vPosn;"
+	"varying vec2 vTex0;"
 	"void main() {\n"
-	"	FragColor = vec4(1.0 / 3.0);\n"
+	"	vec3 tex0rgb = texture2D(srcTx, vTex0).rgb;"
+	"	gl_FragColor = vec4(tex0rgb, 1.0);\n"
 	"}\n";
 
-void framebufferTest() {
-	GLuint fbTx = 0;
-	glGenTextures(1, &fbTx);
-	glBindTexture(GL_TEXTURE_2D, fbTx);
+GLuint progId = 0; /**< Program ID. */
+GLuint vertId = 0; /**< Vertex shader ID. */
+GLuint fragId = 0; /**< Fragment shader ID. */
+
+bool createVertFragShaders(const GLchar* vertText, const GLchar* fragText) {
+	assert(progId == 0);
+	progId = glCreateProgram();
+	if (progId) {
+		glBindAttribLocation(progId, VERT_POSN_ID, "aPosn");
+		glBindAttribLocation(progId, VERT_TEX0_ID, "aTex0");
+		glBindAttribLocation(progId, VERT_TEX1_ID, "aTex1");
+		vertId = compileShaderText(GL_VERTEX_SHADER,   vertText);
+		fragId = compileShaderText(GL_FRAGMENT_SHADER, fragText);
+		if (vertId && fragId) {
+			glAttachShader(progId, vertId);
+			glAttachShader(progId, fragId);
+			glLinkProgram (progId);
+			glUseProgram  (progId);
+			return true;
+		}
+	}
+	return false;
+}
+
+void deleteVertFragShaders() {
+	glDeleteProgram(progId);
+	progId = 0;
+	glDeleteShader (vertId);
+	vertId = 0;
+	glDeleteShader (fragId);
+	fragId = 0;
+}
+
+GLuint quadId = 0;
+GLuint fbTxId = 0;
+
+void initFramebufferTest() {
+#ifndef DEBUG_DRAW_QUAD
+	assert(fbTxId == 0);
+	glGenTextures(1, &fbTxId);
+	glBindTexture(GL_TEXTURE_2D, fbTxId);
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, 4, 4, 0, GL_RGBA, GL_FLOAT, NULL);
 	filterClampBoilerplate();
 	glBindTexture(GL_TEXTURE_2D, 0);
@@ -401,55 +458,61 @@ void framebufferTest() {
 	GLuint fbuf = 0;
 	glGenFramebuffers(1, &fbuf);
 	glBindFramebuffer(GL_FRAMEBUFFER, fbuf);
-	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, fbTx, 0);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, fbTxId, 0);
 	assert(glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE);
 	assert(glGetError() == 0);
+#endif
 
-	uint8_t const block[16] = {0xFF, 0x00, 0xDB, 0xB6, 0x92, 0x6D, 0x49, 0x24};
+	createVertFragShaders(vertShaderTexture, fragShaderTexture);
+
+	uint8_t const block[16] = {
+		0xFF, 0x00, 0xDB, 0xB6,
+		0x92, 0x6D, 0x49, 0x24,
+		0x24, 0x49, 0x6D, 0x92,
+		0xB6, 0xDB, 0x00, 0xFF
+	};
 	GLuint txName = 0;
 	glGenTextures(1, &txName);
 	glBindTexture(GL_TEXTURE_2D, txName);
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, 4, 4, 0, GL_RED, GL_UNSIGNED_BYTE, block);
 	filterClampBoilerplate();
 
-    GLuint vert = compileShaderText(GL_VERTEX_SHADER,   vertShaderTexture);
-    GLuint frag = compileShaderText(GL_FRAGMENT_SHADER, fragShaderTexture);
-    GLuint prog = glCreateProgram();
-    glAttachShader(prog, vert);
-    glAttachShader(prog, frag);
-    glLinkProgram(prog);
-    glUseProgram (prog);
-    assert(glGetError() == 0);
-
 	float const verts[]= {
-		 1.0f,  1.0f,
-		-1.0f,  1.0f,
-		-1.0f, -1.0f,
-		-1.0f, -1.0f,
-		 1.0f, -1.0f,
-		 1.0f,  1.0f,
-	};
-	GLuint quad = 0;
-	glGenBuffers(1, &quad);
-	glBindBuffer(GL_ARRAY_BUFFER, quad);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(verts), verts, GL_STATIC_DRAW);
-	assert(glGetError() == 0);
-	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, 0);
-	assert(glGetError() == 0);
-	glEnableVertexAttribArray(0);
-	assert(glGetError() == 0);
+		 1.0f,  1.0f, 1.0f, 1.0f, // TR
+		-1.0f,  1.0f, 0.0f, 1.0f, // TL
+		-1.0f, -1.0f, 0.0f, 0.0f, // BL
 
+		-1.0f, -1.0f, 0.0f, 0.0f, // BL
+		 1.0f, -1.0f, 1.0f, 0.0f, // BR
+		 1.0f,  1.0f, 1.0f, 1.0f, // TR
+	};
+	quadId = 0;
+	glGenBuffers(1, &quadId);
+	glBindBuffer(GL_ARRAY_BUFFER, quadId);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(verts), verts, GL_STATIC_DRAW);
+	glVertexAttribPointer(VERT_POSN_ID, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), reinterpret_cast<void*>(0));
+	glEnableVertexAttribArray(VERT_POSN_ID);
+	glVertexAttribPointer(VERT_TEX0_ID, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), reinterpret_cast<void*>(2 * sizeof(float)));
+	glEnableVertexAttribArray(VERT_TEX0_ID);
+	assert(glGetError() == 0);
+}
+
+void drawFramebufferTest() {
+#ifndef DEBUG_DRAW_QUAD
 	glViewport(0, 0, 4, 4);
 	glClearColor(0.25f, 0.25f, 0.25f, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT);
+#endif
 
-	glBindBuffer(GL_ARRAY_BUFFER, quad);
+	glBindBuffer(GL_ARRAY_BUFFER, quadId);
 	glDrawArrays(GL_TRIANGLES, 0, 6);
 	glFinish();
 	assert(glGetError() == 0);
 
-	glBindTexture(GL_TEXTURE_2D, fbTx);
+#ifndef DEBUG_DRAW_QUAD
+	glBindTexture(GL_TEXTURE_2D, fbTxId);
 	dumpBoundChannelData(true);
+#endif
 }
 
 void APIENTRY debugCallback(GLenum /*source*/, GLenum /*type*/, GLuint /*id*/, GLenum /*severity*/, GLsizei /*length*/, const GLchar* message, const void* /*userParam*/) {
@@ -465,7 +528,16 @@ void setup() {
 	//bc4RedTest();
 	//red8Test();
 	//computeTest();
-	framebufferTest();
+	initFramebufferTest();
+	drawFramebufferTest();
+	/*
+	printf("Control 0xDB: 0x%08X (%0.8f)\n", floatBits(0xDB / 255.0f), 0xDB / 255.0f);
+	printf("Control 0xB6: 0x%08X (%0.8f)\n", floatBits(0xB6 / 255.0f), 0xB6 / 255.0f);
+	printf("Control 0x92: 0x%08X (%0.8f)\n", floatBits(0x92 / 255.0f), 0x92 / 255.0f);
+	printf("Control 0x6D: 0x%08X (%0.8f)\n", floatBits(0x6D / 255.0f), 0x6D / 255.0f);
+	printf("Control 0x49: 0x%08X (%0.8f)\n", floatBits(0x49 / 255.0f), 0x49 / 255.0f);
+	printf("Control 0x24: 0x%08X (%0.8f)\n", floatBits(0xB6 / 255.0f), 0x24 / 255.0f);
+	 */
 }
 
 void draw(GLFWwindow* window) {
@@ -474,20 +546,23 @@ void draw(GLFWwindow* window) {
 	glViewport(0, 0, fbW, fbH);
 	glClearColor(0.3f, 0.4f, 0.8f, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT);
+
+	drawFramebufferTest();
 }
 
 int main(int /*argc*/, char* /*argv*/[]) {
 	if (!glfwInit()) {
 		exit(EXIT_FAILURE);
 	}
-	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE); //<-- Re-enable this and add VAO support
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
+	//glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE); //<-- Re-enable this and add VAO support
 #ifdef __APPLE__
-	glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+	//glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE); //<-- Can't do this and get a legacy context
 #endif
-	// No need to show the window, but we do need to create it for GLFW to work
+#ifndef DEBUG_DRAW_QUAD
 	glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
+#endif
 
 	GLFWwindow* window = glfwCreateWindow(512, 512, "Test", NULL, NULL);
 	if (!window) {
@@ -497,7 +572,7 @@ int main(int /*argc*/, char* /*argv*/[]) {
 
 	setup();
 
-#if 0
+#ifdef DEBUG_DRAW_QUAD
 	while (!glfwWindowShouldClose(window)) {
 		draw(window);
 		glfwSwapBuffers(window);
