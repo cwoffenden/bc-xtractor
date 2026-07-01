@@ -263,6 +263,67 @@ void create4x4RedBC4Vals(GLuint txId) {
 }
 
 /**
+ * Internal helper to perform the work of filling a BC1 or BC3 colour block.
+ * The layout is the same, the decoder type determines the result.
+ *
+ * \note The texel pattern puts the four derived values into the first row.
+ *
+ * \param[in] block address of the block to fill
+ * \param[in] val0 first endpoint
+ * \param[in] val1 second endpoint
+ * \param[in] dest choice of \c GL_RED, \c GL_GREEN or \c GL_BLUE channel (or \c GL_RGB565 for all)
+ */
+void fillBC1Block(BCBlock* block, unsigned val0, unsigned val1, unsigned dest = GL_RED) {
+	assert(block);
+	new(block) BCBlock(
+		0x00, 0x00,
+		0x00, 0x00,
+		0xE4, 0x39, // 0123 | 1230
+		0x4E, 0x93  // 2301 | 3012
+	);
+	RGB565* endpt = block->bc1.endpt;
+	switch (dest) {
+	case GL_RED:
+		endpt[0].r = val0;
+		endpt[1].r = val1;
+		break;
+	case GL_GREEN:
+		endpt[0].g = val0;
+		endpt[1].g = val1;
+		break;
+	case GL_BLUE:
+		endpt[0].b = val0;
+		endpt[1].b = val1;
+		break;
+	default:
+		endpt[0].rgb565 = val0;
+		endpt[1].rgb565 = val1;
+	}
+}
+
+/**
+ * Internal helper to perform the work of filling a BC3 alpha or BC4 block (or
+ * the two halves of a BC5 block). The layout is the same, the decoder type
+ * determines the result.
+ *
+ * \note The texel pattern puts the eight derived values into the first rows.
+ *
+ * \param[in] block address of the block to fill
+ * \param[in] val0 first endpoint
+ * \param[in] val1 second endpoint
+ */
+void fillBC4Block(BCBlock* block, unsigned val0, unsigned val1) {
+	assert(block);
+	new(block) BCBlock(
+		0x00, 0x00,
+		0x88, 0xC6, 0xFA, // 01234567
+		0x77, 0x39, 0x05  // 76543210
+	);
+	block->bc4.endpt[0] = val0;
+	block->bc4.endpt[1] = val1;
+}
+
+/**
  * Creates a BC3 texture grid with endpoints varying between the specified
  * minimum and maximum, on the selected \a channel only. Variance in the first
  * endpoint runs down the Y-axis (being stable in the X).
@@ -304,51 +365,15 @@ unsigned createBC3(GLuint txId, unsigned min0 = 31, unsigned max0 = 31, unsigned
 			for(unsigned gridX = min1; gridX <= max1; gridX++) {
 				if (channel == GL_ALPHA) {
 					// Alpha block with endpoints
-					new(next) BCBlock(
-						0x00, 0x00,
-						0x88, 0xC6, 0xFA, // 01234567
-						0x77, 0x39, 0x05  // 76543210
-					);
-					next++;
+					fillBC4Block(next++, gridY, gridX);
 					// Colour block set to white
-					new(next) BCBlock(
-						0xFF, 0xFF,
-						0x00, 0x00,
-						0x00, 0x00,
-						0x00, 0x00
-					);
+					fillBC1Block(next++, 0xFFFF, 0xFFFF, GL_RGB565);
 				} else {
 					// Alpha block set to solid
-					new(next) BCBlock(
-						0xFF, 0x00,
-						0x00, 0x00, 0x00,
-						0x00, 0x00, 0x00
-					);
-					next++;
+					fillBC4Block(next++, 0xFF, 0xFF);
 					// Colour block with endpoints
-					new(next) BCBlock(
-						0x00, 0x00,
-						0x00, 0x00,
-						0xE4, 0x39, // 0123 | 1230
-						0x4E, 0x93  // 2301 | 3012
-					);
-					RGB565* endpt = next->bc1.endpt;
-					switch (channel) {
-					case GL_RED:
-						endpt[0].r = gridY;
-						endpt[1].r = gridX;
-						break;
-					case GL_GREEN:
-						endpt[0].g = gridY;
-						endpt[1].g = gridX;
-						break;
-					default:
-						endpt[0].b = gridY;
-						endpt[1].b = gridX;
-						break;
-					}
+					fillBC1Block(next++, gridY, gridX, channel);
 				}
-				next++;
 			}
 		}
 		glBindTexture(GL_TEXTURE_2D, txId);
@@ -397,14 +422,7 @@ unsigned createBC4Red(GLuint txId, unsigned min0 = 255, unsigned max0 = 255, uns
 		BCBlock* next = data;
 		for(unsigned gridY = min0; gridY <= max0; gridY++) {
 			for(unsigned gridX = min1; gridX <= max1; gridX++) {
-				new(next) BCBlock(
-					0x00, 0x00,
-					0x88, 0xC6, 0xFA, // 01234567
-					0x77, 0x39, 0x05  // 76543210
-				);
-				next->bc4.endpt[0] = gridY;
-				next->bc4.endpt[1] = gridX;
-				next++;
+				fillBC4Block(next++, gridY, gridX);
 			}
 		}
 		glBindTexture(GL_TEXTURE_2D, txId);
