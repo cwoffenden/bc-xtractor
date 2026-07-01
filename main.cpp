@@ -24,18 +24,23 @@
  */
 //#define DEBUG_DRAW_QUAD
 
+/**
+ * \c BCBlock internal union for 16-bit colour endpoints.
+ */
+union RGB565 {
+	uint16_t rgb565;
+	struct {
+		uint16_t b: 5;
+		uint16_t g: 6;
+		uint16_t r: 5;
+	};
+};
+
 struct BCBlock {
 	union {
 		uint8_t raw[8];
 		struct {
-			union {
-				uint16_t rgb565;
-				struct {
-					uint16_t b: 5;
-					uint16_t g: 6;
-					uint16_t r: 5;
-				};
-			} endpt[2];
+			RGB565 endpt[2];
 			union {
 				uint32_t texels;
 				struct {
@@ -78,7 +83,7 @@ struct BCBlock {
 		} bc4;
 		uint64_t data;
 	};
-	BCBlock() : data(0) {}
+	BCBlock() {}
 	BCBlock(int raw0, int raw1, int raw2, int raw3, int raw4, int raw5, int raw6, int raw7) {
 		raw[0] = raw0;
 		raw[1] = raw1;
@@ -258,23 +263,112 @@ void create4x4RedBC4Vals(GLuint txId) {
 }
 
 /**
+ * Creates a BC3 texture grid with endpoints varying between the specified
+ * minimum and maximum, on the selected \a channel only. Variance in the first
+ * endpoint runs down the Y-axis (being stable in the X).
+ *
+ * \note The \a channel determines the maximum endpoint values and the eventual
+ * texture size: \c GL_RED and \GL_BLUE are \c 31, \c GL_GREEN is \c 63, and
+ * \c GL_ALPHA is \c 255 (but note that the interpolations should have more
+ * accuracy for BC4 than BC3 alpha).
+ *
+ * \param[in] pre-generated texture ID to use
+ * \param[in] min0 minimum first endpoint
+ * \param[in] max0 maximum first endpoint (inclusive)
+ * \param[in] min1 minimum second endpoint
+ * \param[in] max1 maximum second endpoint (inclusive)
+ * \param[in] channel which channel to use (e.g. \c GL_RED for the red channel)
+ * \return the number of 4x4 entries
+ */
+unsigned createBC3(GLuint txId, unsigned min0 = 31, unsigned max0 = 31, unsigned min1 = 0, unsigned max1 = 0, unsigned channel = GL_RED) {
+	assert(txId);
+	assert(min0 < 256 && max0 < 256 && min0 <= max0);
+	assert(min1 < 256 && max1 < 256 && min1 <= max1);
+	assert(channel >= GL_RED && channel <= GL_ALPHA);
+	GLsizei gridW = (max1 + 1) - min1;
+	GLsizei gridH = (max0 + 1) - min0;
+	GLsizei grids = gridW * gridH;
+	GLsizei maxWH = 32 * 32;
+	if (channel == GL_GREEN) {
+		maxWH = 64 * 64;
+	} else {
+		if (channel == GL_ALPHA) {
+			maxWH = 256 * 256;
+		}
+	}
+	assert(grids <= maxWH);
+	if (grids > 0 && grids <= maxWH) {
+		BCBlock* const data = new BCBlock[grids * 2];
+		BCBlock* next = data;
+		for(unsigned gridY = min0; gridY <= max0; gridY++) {
+			for(unsigned gridX = min1; gridX <= max1; gridX++) {
+				if (channel == GL_ALPHA) {
+					// Alpha block with endpoints
+					new(next) BCBlock(
+						0x00, 0x00,
+						0x88, 0xC6, 0xFA, // 01234567
+						0x77, 0x39, 0x05  // 76543210
+					);
+					next++;
+					// Colour block set to white
+					new(next) BCBlock(
+						0xFF, 0xFF,
+						0x00, 0x00,
+						0x00, 0x00,
+						0x00, 0x00
+					);
+				} else {
+					// Alpha block set to solid
+					new(next) BCBlock(
+						0xFF, 0x00,
+						0x00, 0x00, 0x00,
+						0x00, 0x00, 0x00
+					);
+					next++;
+					// Colour block with endpoints
+					new(next) BCBlock(
+						0x00, 0x00,
+						0x00, 0x00,
+						0xE4, 0x39, // 0123 | 1230
+						0x4E, 0x93  // 2301 | 3012
+					);
+					RGB565* endpt = next->bc1.endpt;
+					switch (channel) {
+					case GL_RED:
+						endpt[0].r = gridY;
+						endpt[1].r = gridX;
+						break;
+					case GL_GREEN:
+						endpt[0].g = gridY;
+						endpt[1].g = gridX;
+						break;
+					default:
+						endpt[0].b = gridY;
+						endpt[1].b = gridX;
+						break;
+					}
+				}
+				next++;
+			}
+		}
+		glBindTexture(GL_TEXTURE_2D, txId);
+		glCompressedTexImage2D(GL_TEXTURE_2D, 0, GL_COMPRESSED_RGBA_S3TC_DXT3_EXT,
+			gridW * 4, gridH * 4, 0,
+				grids * sizeof(BCBlock) * 2 /* colour + alpha */, data);
+		filterClampBoilerplate();
+		glFlush();
+		return grids;
+	}
+	return 0;
+}
+
+/**
  * Creates a 4x4 compressed BC3 texture.
  *
  * \param[in] txId pre-generated texture ID to use
  */
-void create4x4RedBC3(GLuint txId) {
-	assert(txId);
-	glBindTexture(GL_TEXTURE_2D, txId);
-	BCBlock block[2] = {{/*unused alpha*/}, {
-		0x00, 0x00,
-		0x00, 0x00,
-		0xE4, 0x39, // 0123 | 1230
-		0x4E, 0x93} // 2301 | 3012
-	};
-	block[1].bc1.endpt[0].r = 31;
-	block[1].bc1.endpt[1].r =  0;
-	glCompressedTexImage2D(GL_TEXTURE_2D, 0, GL_COMPRESSED_RGBA_S3TC_DXT3_EXT, 4, 4, 0, 16, block);
-	filterClampBoilerplate();
+void create4x4BC3Red(GLuint txId) {
+	createBC3(txId, 31, 31, 0, 0, GL_RED);
 }
 
 /**
@@ -289,15 +383,17 @@ void create4x4RedBC3(GLuint txId) {
  * \param[in] max1 maximum second endpoint (inclusive)
  * \return the number of 4x4 entries
  */
-unsigned createRedBC4(GLuint txId, unsigned min0 = 255, unsigned max0 = 255, unsigned min1 = 0, unsigned max1 = 0) {
+unsigned createBC4Red(GLuint txId, unsigned min0 = 255, unsigned max0 = 255, unsigned min1 = 0, unsigned max1 = 0) {
 	assert(txId);
 	assert(min0 < 256 && max0 < 256 && min0 <= max0);
 	assert(min1 < 256 && max1 < 256 && min1 <= max1);
 	GLsizei gridW = (max1 + 1) - min1;
 	GLsizei gridH = (max0 + 1) - min0;
 	GLsizei grids = gridW * gridH;
-	if (grids > 0 && grids <= (256 * 256)) {
-		BCBlock* const data = new BCBlock[gridH * gridW];
+	GLsizei maxWH = 256 * 256;
+	assert(grids <= maxWH);
+	if (grids > 0 && grids <= maxWH) {
+		BCBlock* const data = new BCBlock[grids];
 		BCBlock* next = data;
 		for(unsigned gridY = min0; gridY <= max0; gridY++) {
 			for(unsigned gridX = min1; gridX <= max1; gridX++) {
@@ -314,7 +410,7 @@ unsigned createRedBC4(GLuint txId, unsigned min0 = 255, unsigned max0 = 255, uns
 		glBindTexture(GL_TEXTURE_2D, txId);
 		glCompressedTexImage2D(GL_TEXTURE_2D, 0, GL_COMPRESSED_RED_RGTC1,
 			gridW * 4, gridH * 4, 0,
-				gridH * gridW * sizeof(BCBlock), data);
+				grids * sizeof(BCBlock), data);
 		filterClampBoilerplate();
 		glFlush();
 		return grids;
@@ -327,14 +423,14 @@ unsigned createRedBC4(GLuint txId, unsigned min0 = 255, unsigned max0 = 255, uns
  *
  * \param[in] txId pre-generated texture ID to use
  */
-void create4x4RedBC4(GLuint txId) {
-	createRedBC4(txId, 255, 255, 0, 0);
+void create4x4BC4Red(GLuint txId) {
+	createBC4Red(txId, 255, 255, 0, 0);
 }
 
 void bc3RedTest() {
 	GLuint txName = 0;
 	glGenTextures(1, &txName);
-	create4x4RedBC3(txName);
+	create4x4BC3Red(txName);
 
 	dumpBoundChannelData(false);
 
@@ -345,7 +441,7 @@ void bc3RedTest() {
 void bc4RedTest() {
 	GLuint txName = 0;
 	glGenTextures(1, &txName);
-	create4x4RedBC4(txName);
+	create4x4BC3Red(txName);
 
 	dumpBoundChannelData(true);
 
@@ -508,8 +604,8 @@ GLchar const fragShaderTexture120[] =
 	"varying vec2 vPosn;"
 	"varying vec2 vTex0;"
 	"void main() {\n"
-	"	vec3 tex0rgb = texture2D(srcTx, vTex0).rgb;"
-	"	gl_FragColor = vec4(tex0rgb, 1.0);\n"
+	"	vec4 tex0rgb = texture2D(srcTx, vTex0);"
+	"	gl_FragColor = tex0rgb;\n"
 	"}\n";
 
 GLuint progId = 0; /**< Program ID. */
@@ -593,7 +689,7 @@ void initFramebufferTest() {
 
 	GLuint txName = 0;
 	glGenTextures(1, &txName);
-	create4x4RedBC4(txName);
+	create4x4BC3Red(txName);
 
 	float const verts[]= {
 		 1.0f,  1.0f, 1.0f, 1.0f, // TR
