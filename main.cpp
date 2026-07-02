@@ -376,16 +376,6 @@ unsigned createBC1(GLuint txId, unsigned min0, unsigned max0, unsigned min1, uns
 }
 
 /**
- * Creates a 4x4 compressed BC3 texture with known values for testing
- * (purposefully choosing the \e mode with a single interpolated colour).
- *
- * \param[in] txId pre-generated texture ID to use
- */
-void create4x4BC1Red(GLuint txId) {
-	createBC1(txId, 15, 15, 31, 31, GL_RED);
-}
-
-/**
  * Creates a BC3 texture grid with endpoints varying between the specified
  * minimum and maximum, on the selected \a channel only. Variance in the first
  * endpoint runs down the Y-axis (being stable in the X).
@@ -450,15 +440,6 @@ unsigned createBC3(GLuint txId, unsigned min0, unsigned max0, unsigned min1, uns
 }
 
 /**
- * Creates a 4x4 compressed BC3 texture with known values for testing.
- *
- * \param[in] txId pre-generated texture ID to use
- */
-void create4x4BC3Red(GLuint txId) {
-	createBC3(txId, 31, 31, 0, 0, GL_RED);
-}
-
-/**
  * Creates a red-only BC4 texture grid with endpoints varying between the
  * specified minimum and maximum. Variance in the first endpoint (\c red0 in the
  * Khronos RGTC specification) runs down the Y-axis (being stable in the X).
@@ -499,12 +480,34 @@ unsigned createBC4Red(GLuint txId, unsigned min0, unsigned max0, unsigned min1, 
 }
 
 /**
+ * Creates a 4x4 compressed BC3 texture with known values for testing
+ * (purposefully choosing the \e mode with a single interpolated colour).
+ *
+ * \param[in] txId pre-generated texture ID to use
+ */
+void create4x4BC1Red(GLuint txId) {
+	unsigned count = createBC1(txId, 15, 15, 31, 31, GL_RED);
+	assert(count);
+}
+
+/**
+ * Creates a 4x4 compressed BC3 texture with known values for testing.
+ *
+ * \param[in] txId pre-generated texture ID to use
+ */
+void create4x4BC3Red(GLuint txId) {
+	unsigned count = createBC3(txId, 31, 31, 0, 0, GL_RED);
+	assert(count);
+}
+
+/**
  * Creates a 4x4 compressed BC4 texture with known values for testing.
  *
  * \param[in] txId pre-generated texture ID to use
  */
 void create4x4BC4Red(GLuint txId) {
-	createBC4Red(txId, 255, 255, 0, 0);
+	unsigned count = createBC4Red(txId, 255, 255, 0, 0);
+	assert(count);
 }
 
 void bc3RedTest() {
