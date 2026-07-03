@@ -340,6 +340,32 @@ bool currentBoundIsCompressed() {
 }
 
 /**
+ * Tests whether the currently bound texture has valid  component data.
+ *
+ * \param[in] channel which channel to query
+ * \return \c true if the texture's first mipmap level has the specified component
+ */
+bool currentBoundHasData(GLenum channel = GL_RED) {
+	GLenum chEnum;
+	switch (channel) {
+	case GL_RED:
+		chEnum = GL_TEXTURE_RED_SIZE;
+		break;
+	case GL_GREEN:
+		chEnum = GL_TEXTURE_GREEN_SIZE;
+		break;
+	case GL_BLUE:
+		chEnum = GL_TEXTURE_BLUE_SIZE;
+		break;
+	default:
+		chEnum = GL_TEXTURE_ALPHA_SIZE;
+	}
+	GLint size = 0;
+	glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, chEnum, &size);
+	return size > 0;
+}
+
+/**
  * Creates a BC1 texture grid with endpoints varying between the specified
  * minimum and maximum, on the selected \a channel only. Variance in the first
  * endpoint runs down the Y-axis (being stable in the X).
@@ -586,17 +612,6 @@ float normalize(T val) {
 #define SWEEP_BC4 1024
 
 /**
- * Tests whether the currently bound texture has valid red component data.
- *
- * \return \c true if the texture's first mipmap level has a red component
- */
-bool currentBoundHasRedData() {
-	GLint redSize = 0;
-	glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_RED_SIZE, &redSize);
-	return redSize > 0;
-}
-
-/*
  * Creates a test texture with a known pattern sweeping the range of possible
  * values for the storage type, which should result in exact float values that
  * can be verified. Any discrepancy between the known and expected values means
@@ -607,7 +622,7 @@ bool currentBoundHasRedData() {
  *
  * \tparam T data type, tested with \c uint8_t and \c uint16_t
  * \param[in] size texture dimension to use (e.g \c 256 for BC3)
- * \return true if texture creation was successful
+ * \return true if texture creation was successful and \a txId has valid content
  */
 template<typename T = uint8_t>
 bool createTestSweepRed(GLuint txId, unsigned const size) {
@@ -630,12 +645,32 @@ bool createTestSweepRed(GLuint txId, unsigned const size) {
 	filterClampBoilerplate();
 	glFlush();
 	delete[] pixels;
-	return currentBoundHasRedData();
+	return currentBoundHasData(GL_RED);
 }
 
 template<typename T = uint8_t>
-void verifyTestSweepRed(RGBAf32* const /*pixels*/, unsigned const size) {
-	(void) size;
+bool verifyTestSweepRed(RGBAf32* const rgba, unsigned const size) {
+	assert(rgba && size);
+	unsigned idxVal = 0;
+	for (unsigned y = 0; y < size; y++) {
+		for (unsigned x = 0; x < size; x++) {
+			T val;
+			if ((y & 1)) {
+				val = static_cast<T>(((idxVal & 1) ? ~idxVal :  idxVal) >> 1);
+			} else {
+				val = static_cast<T>(((idxVal & 1) ?  idxVal : ~idxVal) >> 1);
+			}
+			float valN = normalize<T>(val);
+			float redF = rgba[idxVal].r;
+			if (valN != redF) {
+				printf("Expected %0.8f (0x%08X) found %0.8f (0x%08X) @ %d,%d\n",
+					valN, val, redF, floatBits(redF), x, y);
+				return false;
+			}
+			idxVal++;
+		}
+	}
+	return true;
 }
 
 void bc3RedTest() {
@@ -893,7 +928,7 @@ GLuint quadId = 0;
 
 void initFramebufferTest() {
 #ifndef DEBUG_DRAW_QUAD
-	createFloatFramebuffer(4, 4);
+	createFloatFramebuffer(SWEEP_BC1, SWEEP_BC1);
 #endif
 
 	createVertFragShaders(vertShaderTexture120, fragShaderTexture120);
@@ -926,7 +961,7 @@ void initFramebufferTest() {
 void drawFramebufferTest() {
 #ifndef DEBUG_DRAW_QUAD
 	glBindFramebuffer(GL_FRAMEBUFFER, fbufId);
-	glViewport(0, 0, 4, 4);
+	glViewport(0, 0, SWEEP_BC1, SWEEP_BC1);
 	glClearColor(0.25f, 0.25f, 0.25f, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT);
 #endif
@@ -938,7 +973,13 @@ void drawFramebufferTest() {
 
 #ifndef DEBUG_DRAW_QUAD
 	glBindTexture(GL_TEXTURE_2D, fbTxId);
-	dumpBoundChannelData(true);
+	//dumpBoundChannelData(true);
+	RGBAf32* rgba = new RGBAf32[SWEEP_BC1 * SWEEP_BC1];
+	glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_FLOAT, rgba);
+	if (verifyTestSweepRed<uint8_t>(rgba, SWEEP_BC1)) {
+		puts("Success!");
+	}
+	delete[] rgba;
 #endif
 }
 
@@ -968,12 +1009,14 @@ void setup() {
 	printf("Control 0xAA: 0x%08X (%0.8f)\n", floatBits(0xAA / 255.0f), 0xAA / 255.0f);
 	printf("Control 0x55: 0x%08X (%0.8f)\n", floatBits(0x55 / 255.0f), 0x55 / 255.0f);
 	 */
+	/*
 	printf("Control 0xDB: 0x%08X (%0.8f)\n", floatBits(0xDB / 255.0f), 0xDB / 255.0f);
 	printf("Control 0xB6: 0x%08X (%0.8f)\n", floatBits(0xB6 / 255.0f), 0xB6 / 255.0f);
 	printf("Control 0x92: 0x%08X (%0.8f)\n", floatBits(0x92 / 255.0f), 0x92 / 255.0f);
 	printf("Control 0x6D: 0x%08X (%0.8f)\n", floatBits(0x6D / 255.0f), 0x6D / 255.0f);
 	printf("Control 0x49: 0x%08X (%0.8f)\n", floatBits(0x49 / 255.0f), 0x49 / 255.0f);
 	printf("Control 0x24: 0x%08X (%0.8f)\n", floatBits(0xB6 / 255.0f), 0x24 / 255.0f);
+	 */
 }
 
 void draw(GLFWwindow* window) {
