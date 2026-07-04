@@ -1,6 +1,7 @@
 #include <cassert>
 #include <cstdlib>
 #include <cstdio>
+#include <limits>
 
 #include "rgba.h"
 
@@ -565,18 +566,23 @@ void create4x4BC4Red(GLuint txId) {
  */
 template<typename T>
 GLenum getDataType() {
-	switch (std::numeric_limits<T>::max()) {
-	case INT8_MAX:
+	T max(std::numeric_limits<T>::max());
+	if (max == INT8_MAX) {
 		return GL_BYTE;
-	case UINT8_MAX:
-		return GL_UNSIGNED_BYTE;
-	case INT16_MAX:
-		return GL_SHORT;
-	case UINT16_MAX:
-		return GL_UNSIGNED_SHORT;
-	default:
-		return GL_NONE;
+	} else {
+		if (max == UINT8_MAX) {
+			return GL_UNSIGNED_BYTE;
+		} else {
+			if (max == INT16_MAX) {
+				return GL_SHORT;
+			} else {
+				if (max == UINT16_MAX) {
+					return GL_UNSIGNED_SHORT;
+				}
+			}
+		}
 	}
+	return GL_NONE;
 }
 
 /*
@@ -585,18 +591,23 @@ GLenum getDataType() {
  */
 template<typename T>
 float normalize(T val) {
-	switch (std::numeric_limits<T>::max()) {
-	case INT8_MAX:
+	T max(std::numeric_limits<T>::max());
+	if (max == INT8_MAX) {
 		return std::max(val / float(INT8_MAX), -1.0f);
-	case UINT8_MAX:
-		return val / float(UINT8_MAX);
-	case INT16_MAX:
-		return std::max(val / float(INT16_MAX), -1.0f);
-	case UINT16_MAX:
-		return val / float(UINT16_MAX);
-	default:
-		return 0.0f;
+	} else {
+		if (max == UINT8_MAX) {
+			return val / float(UINT8_MAX);
+		} else {
+			if (max == INT16_MAX) {
+				return std::max(val / float(INT16_MAX), -1.0f);
+			} else {
+				if (max == UINT16_MAX) {
+					return val / float(UINT16_MAX);
+				}
+			}
+		}
 	}
+	return 0.0f;
 }
 
 /**
@@ -792,7 +803,7 @@ void computeTest() {
 	GLuint srcTxName = 0;
 	glGenTextures(1, &srcTxName);
 	glActiveTexture(GL_TEXTURE0);
-	create4x4RedBC4(srcTxName);
+	create4x4BC1Red(srcTxName);
 
 	/*
 	uint8_t red4x4[16] = {0xFF, 0x00, 0xDB, 0xB6, 0x92, 0x6D, 0x49, 0x24};
