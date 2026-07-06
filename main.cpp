@@ -8,7 +8,16 @@
 #ifdef __APPLE__
 #define GL_SILENCE_DEPRECATION
 #endif
+/*
+ * Notes for Mac: GLFW_INCLUDE_GLCOREARB will include gl3.h, which with a 2.1
+ * context will fail for calls to glGenVertexArrays, etc., (invalid operation),
+ * needing instead the APPLE suffix versions. The APPLE suffix versions fail
+ * with a 3.2 or higher context, and since these higher GL's need VAOs we'll
+ * fail by not creating one. It really needs the correct functions dynamically
+ * loading.
+ */
 #define GLFW_INCLUDE_GLCOREARB
+#define GLFW_INCLUDE_GLEXT
 #define GL_GLEXT_PROTOTYPES
 #include <GLFW/glfw3.h>
 
@@ -19,7 +28,16 @@
 #define GL_COMPRESSED_RGBA_S3TC_DXT3_EXT 0x83F2
 #endif
 #ifndef GL_RGBA32F
-#define GL_RGBA32F GL_RGBA32F_EXT
+#define GL_RGBA32F GL_RGBA32F_ARB
+#endif
+#ifndef GL_MAJOR_VERSION
+#define GL_MAJOR_VERSION 0x821B
+#endif
+
+#ifndef GL_VERSION_3_0
+#define glGenVertexArrays glGenVertexArraysAPPLE
+#define glBindVertexArray glBindVertexArrayAPPLE
+#define glDeleteVertexArrays glDeleteVertexArraysAPPLE
 #endif
 
 /**
@@ -277,7 +295,7 @@ void create4x4RedBC4Vals(GLuint txId) {
  * \param[in] block address of the block to fill
  * \param[in] val0 first endpoint
  * \param[in] val1 second endpoint
- * \param[in] channel choice of \c GL_RED, \c GL_GREEN or \c GL_BLUE channel (or \c GL_RGB565 for all)
+ * \param[in] channel choice of \c GL_RED, \c GL_GREEN or \c GL_BLUE channel (or \c GL_RGB for all)
  */
 void fillBC1Block(BCBlock* block, unsigned val0, unsigned val1, unsigned channel = GL_RED) {
 	assert(block);
@@ -460,7 +478,7 @@ unsigned createBC3(GLuint txId, unsigned min0, unsigned max0, unsigned min1, uns
 					// Alpha block with endpoints
 					fillBC4Block(next++, gridY, gridX);
 					// Colour block set to white
-					fillBC1Block(next++, 0xFFFF, 0xFFFF, GL_RGB565);
+					fillBC1Block(next++, 0xFFFF, 0xFFFF, GL_RGB);
 				} else {
 					// Alpha block set to solid
 					fillBC4Block(next++, 0xFF, 0xFF);
@@ -634,8 +652,9 @@ float normalize(T val) {
  * covers BC1, BC3 and BC4's ranges.
  *
  * \tparam T data type, tested with \c uint8_t and \c uint16_t
+ * \param[in] txId pre-generated texture ID to use
  * \param[in] size texture dimension to use (e.g \c 256 for BC3)
- * \return true if texture creation was successful and \a txId has valid content
+ * \return \c true if texture creation was successful and \a txId has valid content
  */
 template<typename T = uint8_t>
 bool createTestSweepRed(GLuint txId, unsigned const size) {
@@ -661,6 +680,15 @@ bool createTestSweepRed(GLuint txId, unsigned const size) {
 	return currentBoundHasData(GL_RED);
 }
 
+/**
+ * Verifies the read back of \c #createTestSweepRed() after copying the texture
+ * content into a buffer.
+ *
+ * \tparam T data type, tested with \c uint8_t and \c uint16_t
+ * \param[in] rgba start of the RGBA buffer containing \a size \c * \a size entries
+ * \param[in] size texture dimension to use (e.g \c 256 for BC3)
+ * \return \c true if verification was successful
+ */
 template<typename T = uint8_t>
 bool verifyTestSweepRed(RGBAf32* const rgba, unsigned const size) {
 	assert(rgba && size);
@@ -742,11 +770,11 @@ void bc4Red8ValTest() {
 static GLuint compileShaderText(GLenum const type, const GLchar* const text) {
 	if (GLuint shader = glCreateShader(type)) {
 		const char* texts[1] = {text};
-		glShaderSource (shader, 1, texts, nullptr);
+		glShaderSource (shader, 1, texts, NULL);
 		glCompileShader(shader);
 		GLint compiled;
 		glGetShaderiv(shader, GL_COMPILE_STATUS, &compiled);
-		if (compiled) {
+		if (compiled == GL_TRUE) {
 			return shader;
 		} else {
 			GLint logLen;
@@ -862,6 +890,19 @@ GLchar const vertShaderTexture120[] =
 	"}\n";
 
 /**
+ * GLSL 1.50 version of the \c #vertShaderTexture120 quad shader.
+ */
+GLchar const vertShaderTexture150[] =
+	"#version 150\n"
+	"in vec2 aPosn;\n"
+	"in vec2 aTex0;\n"
+	"out vec2 vTex0;\n"
+	"void main() {\n"
+	"	vTex0 = aTex0;\n"
+	"	gl_Position = vec4(aPosn.x, aPosn.y, 0.0, 1.0);\n"
+	"}\n";
+
+/**
  * GLSL 1.20 compatible fragment shader, designed only to draw a fullscreen
  * textured quad.
  */
@@ -872,6 +913,20 @@ GLchar const fragShaderTexture120[] =
 	"void main() {\n"
 	"	vec4 tex0rgb = texture2D(srcTx, vTex0);\n"
 	"	gl_FragColor = tex0rgb;\n"
+	"}\n";
+
+/**
+ * GLSL 1.50 version of the \c #fragShaderTexture120 quad shader.
+ */
+GLchar const fragShaderTexture150[] =
+	"#version 150\n"
+	"precision highp float;\n"
+	"uniform sampler2D srcTx;\n"
+	"in vec2 vTex0;\n"
+	"out vec4 FragColor;\n"
+	"void main() {\n"
+	"	vec4 tex0rgb = texture(srcTx, vTex0);\n"
+	"	FragColor = tex0rgb;\n"
 	"}\n";
 
 GLuint progId = 0; /**< Program ID. */
@@ -899,8 +954,12 @@ bool createVertFragShaders(const GLchar* vertSrc, const GLchar* fragSrc) {
 			glAttachShader(progId, vertId);
 			glAttachShader(progId, fragId);
 			glLinkProgram (progId);
-			glUseProgram  (progId);
-			return true;
+			GLint linked;
+			glGetProgramiv(progId, GL_LINK_STATUS, &linked);
+			if (linked == GL_TRUE) {
+				glUseProgram(progId);
+				return true;
+			}
 		}
 	}
 	return false;
@@ -910,11 +969,14 @@ bool createVertFragShaders(const GLchar* vertSrc, const GLchar* fragSrc) {
  * Cleanup for \c #createVertFragShaders() (program and shaders).
  */
 void deleteVertFragShaders() {
+	glUseProgram(0);
+	glDetachShader (progId, vertId);
+	glDetachShader (progId, fragId);
 	glDeleteProgram(progId);
-	progId = 0;
 	glDeleteShader (vertId);
-	vertId = 0;
 	glDeleteShader (fragId);
+	progId = 0;
+	vertId = 0;
 	fragId = 0;
 }
 
@@ -959,20 +1021,15 @@ void deleteFramebuffer() {
 	fbTxId = 0;
 }
 
-GLuint quadId = 0; /** Full screen textured quad.  */
+GLuint vaoId = 0; /** VAO fullscreen textured quad.  */
+GLuint vboId = 0; /** VBO for \c vObjId quad. */
 
-void initFramebufferTest() {
-#ifndef DEBUG_DRAW_QUAD
-	createFramebuffer(SWEEP_BC1, SWEEP_BC1);
-#endif
-
-	createVertFragShaders(vertShaderTexture120, fragShaderTexture120);
-
-	GLuint txName = 0;
-	glGenTextures(1, &txName);
-	//create4x4BC1Red(txName);
-	createTestSweepRed<uint8_t>(txName, SWEEP_BC1);
-
+/**
+ * Creates a fullscreen textured quad. After calling, neither the VAO \c vaoId
+ * nor its VBO \c vboId remain bound.
+ */
+void createTexturedQuad() {
+	assert(vaoId == 0);
 	float const verts[]= {
 		 1.0f,  1.0f, 1.0f, 1.0f, // TR
 		-1.0f,  1.0f, 0.0f, 1.0f, // TL
@@ -982,18 +1039,61 @@ void initFramebufferTest() {
 		 1.0f, -1.0f, 1.0f, 0.0f, // BR
 		 1.0f,  1.0f, 1.0f, 1.0f, // TR
 	};
-	quadId = 0;
-	glGenBuffers(1, &quadId);
-	glBindBuffer(GL_ARRAY_BUFFER, quadId);
+	/*
+	 * Mac with GL2.1 and the GL3 header will fail here. GL2 header with the
+	 * APPLE suffix works, as will a GL3 and 4 context.
+	 */
+	glGenVertexArrays(1, &vaoId);
+	glBindVertexArray(vaoId);
+	glGenBuffers(1, &vboId);
+	glBindBuffer(GL_ARRAY_BUFFER, vboId);
 	glBufferData(GL_ARRAY_BUFFER, sizeof(verts), verts, GL_STATIC_DRAW);
 	glVertexAttribPointer(VERT_POSN_ID, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), reinterpret_cast<void*>(0));
 	glEnableVertexAttribArray(VERT_POSN_ID);
 	glVertexAttribPointer(VERT_TEX0_ID, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), reinterpret_cast<void*>(2 * sizeof(float)));
 	glEnableVertexAttribArray(VERT_TEX0_ID);
+	glBindVertexArray(0);
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	assert(glGetError() == 0);
 }
 
+void deleteTexturedQuad() {
+	glDeleteBuffers(1, &vboId);
+	glDeleteVertexArrays(1, &vaoId);
+	vboId = 0;
+	vaoId = 0;
+}
+
+void initFramebufferTest() {
+
+#ifndef DEBUG_DRAW_QUAD
+	createFramebuffer(SWEEP_BC1, SWEEP_BC1);
+#endif
+	/*
+	 * A version 2.1 context doesn't have GL_MAJOR_VERSION (it's 3+), but this
+	 * works since it will error with GL_INVALID_ENUM and take this default.
+	 */
+	GLint version = -1;
+	glGetIntegerv(GL_MAJOR_VERSION, &version);
+	if (version > 2) {
+		createVertFragShaders(vertShaderTexture150, fragShaderTexture150);
+	} else {
+		if (version < 0) {
+			assert(glGetError() == GL_INVALID_ENUM);
+		}
+		createVertFragShaders(vertShaderTexture120, fragShaderTexture120);
+	}
+
+	GLuint txName = 0;
+	glGenTextures(1, &txName);
+	//create4x4BC1Red(txName);
+	createTestSweepRed<uint8_t>(txName, SWEEP_BC1);
+
+	createTexturedQuad();
+}
+
 void drawFramebufferTest() {
+	//assert(vaoId);
 #ifndef DEBUG_DRAW_QUAD
 	glBindFramebuffer(GL_FRAMEBUFFER, fbufId);
 	glViewport(0, 0, SWEEP_BC1, SWEEP_BC1);
@@ -1001,7 +1101,7 @@ void drawFramebufferTest() {
 	glClear(GL_COLOR_BUFFER_BIT);
 #endif
 
-	glBindBuffer(GL_ARRAY_BUFFER, quadId);
+	glBindVertexArray(vaoId);
 	glDrawArrays(GL_TRIANGLES, 0, 6);
 	glFinish();
 	assert(glGetError() == 0);
@@ -1068,8 +1168,8 @@ int main(int /*argc*/, char* /*argv*/[]) {
 	if (!glfwInit()) {
 		exit(EXIT_FAILURE);
 	}
-	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
-	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3); // Mac: 2.1, 3.2 or 4.1
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 2); // Others: 4.3 for Compute shader
 	//glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE); //<-- Re-enable this and add VAO support
 #ifdef __APPLE__
 	//glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE); //<-- Can't do this and get a legacy context
