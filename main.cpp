@@ -12,9 +12,8 @@
  * Notes for Mac: GLFW_INCLUDE_GLCOREARB will include gl3.h, which with a 2.1
  * context will fail for calls to glGenVertexArrays, etc., (invalid operation),
  * needing instead the APPLE suffix versions. The APPLE suffix versions fail
- * with a 3.2 or higher context, and since these higher GL's need VAOs we'll
- * fail by not creating one. It really needs the correct functions dynamically
- * loading.
+ * with a 3+ context, and since these higher GL's need VAOs we'll fail by not
+ * creating one. It really needs the correct functions dynamically loading.
  */
 #define GLFW_INCLUDE_GLCOREARB
 #define GLFW_INCLUDE_GLEXT
@@ -30,21 +29,22 @@
 #ifndef GL_RGBA32F
 #define GL_RGBA32F GL_RGBA32F_ARB
 #endif
-#ifndef GL_MAJOR_VERSION
-#define GL_MAJOR_VERSION 0x821B
-#endif
-
-#ifndef GL_VERSION_3_0
-#define glGenVertexArrays glGenVertexArraysAPPLE
-#define glBindVertexArray glBindVertexArrayAPPLE
-#define glDeleteVertexArrays glDeleteVertexArraysAPPLE
-#endif
 
 /**
  * \def DEBUG_DRAW_QUAD
  * Define this to draw the non-compute path to screen.
  */
 //#define DEBUG_DRAW_QUAD
+
+/**
+ * GL version selected to create the context.
+ */
+enum GLVersion {
+	VERSION_NONE, /**< No valid context. */
+	VERSION_2_1,  /**< Legacy GL without VAO support. */
+	VERSION_3_3,  /**< Most compatible pre-compute shader GL */
+	VERSION_4_3,  /**< Gl with compute shaders. */
+} glVers;
 
 /**
  * \c BCBlock internal union for 16-bit colour endpoints.
@@ -248,6 +248,7 @@ void filterClampBoilerplate() {
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 }
 
+#if 0
 /**
  * Creates a 4x4 red-only uncompressed 8-bit texture with ideal BC3 values.
  *
@@ -283,6 +284,7 @@ void create4x4RedBC4Vals(GLuint txId) {
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, 4, 4, 0, GL_RED, GL_UNSIGNED_BYTE, block);
 	filterClampBoilerplate();
 }
+#endif
 
 //**************************** BC Block Generation ****************************/
 
@@ -575,7 +577,7 @@ void create4x4BC4Red(GLuint txId) {
 }
 #endif
 
-//*****************************************************************************/
+//**************************** Buffer Verification ****************************/
 
 /**
  * Matches the GL type for a given data type, e.g. \c GL_BYTE for \c int8_t
@@ -994,7 +996,7 @@ GLuint fbufId = 0; /**< Framebuffer ID. */
  * \return \c true if a valid framebuffer was created
  */
 bool createFramebuffer(unsigned bufW, unsigned bufH, GLint format = GL_RGBA32F, GLenum type = GL_FLOAT) {
-	assert(fbTxId == 0);
+	assert(fbTxId == 0 && fbufId == 0);
 	bool valid = false;
 	glGenTextures(1, &fbTxId);
 	glBindTexture(GL_TEXTURE_2D, fbTxId);
@@ -1021,12 +1023,12 @@ void deleteFramebuffer() {
 	fbTxId = 0;
 }
 
-GLuint vaoId = 0; /** VAO fullscreen textured quad.  */
-GLuint vboId = 0; /** VBO for \c vObjId quad. */
+GLuint vaoId = 0; /**< VAO fullscreen textured quad.  */
+GLuint vboId = 0; /**< VBO for \c vObjId quad. */
 
-/**
- * Creates a fullscreen textured quad. After calling, neither the VAO \c vaoId
- * nor its VBO \c vboId remain bound.
+/*
+ * Creates a fullscreen textured quad. After calling the VAO \c vaoId and/or its
+ * VBO \c vboId remain bound (to ease drawing, since this is the only geometry).
  */
 void createTexturedQuad() {
 	assert(vaoId == 0);
@@ -1040,11 +1042,15 @@ void createTexturedQuad() {
 		 1.0f,  1.0f, 1.0f, 1.0f, // TR
 	};
 	/*
-	 * Mac with GL2.1 and the GL3 header will fail here. GL2 header with the
-	 * APPLE suffix works, as will a GL3 and 4 context.
+	 * Mac with GL2.1 and the GL3 header will fail here. Using the GL2 header
+	 * with the APPLE suffix works, as will a GL3 and 4 context, but for this
+	 * simple example a VAO isn't used (but it is necessary to have one bound
+	 * for newer GL, otherwise the VBO fails).
 	 */
-	glGenVertexArrays(1, &vaoId);
-	glBindVertexArray(vaoId);
+	if (glVers > VERSION_2_1) {
+		glGenVertexArrays(1, &vaoId);
+		glBindVertexArray(vaoId);
+	}
 	glGenBuffers(1, &vboId);
 	glBindBuffer(GL_ARRAY_BUFFER, vboId);
 	glBufferData(GL_ARRAY_BUFFER, sizeof(verts), verts, GL_STATIC_DRAW);
@@ -1052,14 +1058,14 @@ void createTexturedQuad() {
 	glEnableVertexAttribArray(VERT_POSN_ID);
 	glVertexAttribPointer(VERT_TEX0_ID, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), reinterpret_cast<void*>(2 * sizeof(float)));
 	glEnableVertexAttribArray(VERT_TEX0_ID);
-	glBindVertexArray(0);
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	assert(glGetError() == 0);
 }
 
 void deleteTexturedQuad() {
 	glDeleteBuffers(1, &vboId);
-	glDeleteVertexArrays(1, &vaoId);
+	if (glVers > VERSION_2_1) {
+		glDeleteVertexArrays(1, &vaoId);
+	}
 	vboId = 0;
 	vaoId = 0;
 }
@@ -1069,18 +1075,9 @@ void initFramebufferTest() {
 #ifndef DEBUG_DRAW_QUAD
 	createFramebuffer(SWEEP_BC1, SWEEP_BC1);
 #endif
-	/*
-	 * A version 2.1 context doesn't have GL_MAJOR_VERSION (it's 3+), but this
-	 * works since it will error with GL_INVALID_ENUM and take this default.
-	 */
-	GLint version = -1;
-	glGetIntegerv(GL_MAJOR_VERSION, &version);
-	if (version > 2) {
+	if (glVers > VERSION_2_1) {
 		createVertFragShaders(vertShaderTexture150, fragShaderTexture150);
 	} else {
-		if (version < 0) {
-			assert(glGetError() == GL_INVALID_ENUM);
-		}
 		createVertFragShaders(vertShaderTexture120, fragShaderTexture120);
 	}
 
@@ -1093,15 +1090,16 @@ void initFramebufferTest() {
 }
 
 void drawFramebufferTest() {
-	//assert(vaoId);
+	assert(vboId);
 #ifndef DEBUG_DRAW_QUAD
 	glBindFramebuffer(GL_FRAMEBUFFER, fbufId);
 	glViewport(0, 0, SWEEP_BC1, SWEEP_BC1);
 	glClearColor(0.25f, 0.25f, 0.25f, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT);
 #endif
-
-	glBindVertexArray(vaoId);
+	/*
+	 * The quad's VAO, if used, or its VBO remain bound.
+	 */
 	glDrawArrays(GL_TRIANGLES, 0, 6);
 	glFinish();
 	assert(glGetError() == 0);
@@ -1168,19 +1166,35 @@ int main(int /*argc*/, char* /*argv*/[]) {
 	if (!glfwInit()) {
 		exit(EXIT_FAILURE);
 	}
-	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3); // Mac: 2.1, 3.2 or 4.1
-	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 2); // Others: 4.3 for Compute shader
-	//glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE); //<-- Re-enable this and add VAO support
-#ifdef __APPLE__
-	//glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE); //<-- Can't do this and get a legacy context
-#endif
 #ifndef DEBUG_DRAW_QUAD
 	glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
 #endif
-
-	GLFWwindow* window = glfwCreateWindow(1024, 1024, "Test", NULL, NULL);
+	/*
+	 * We try to create a compute shader compatible context, with retries for
+	 * various other older GLs. Macs are unhappy with GLFW_OPENGL_PROFILE and
+	 * GLFW_OPENGL_FORWARD_COMPAT, so we avoid any other hints.
+	 *
+	 * 4.3 is the minimum for a compute shader (4.1 the maximum for Mac), 3.3
+	 * for the fallback with a framebuffer, 2.1 the oldest supported.
+	 */
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+	glVers = VERSION_4_3;
+	GLFWwindow* window = glfwCreateWindow(512, 512, "Test", NULL, NULL);
 	if (!window) {
-		exit(EXIT_FAILURE);
+		glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+		glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+		glVers = VERSION_3_3;
+		window = glfwCreateWindow(512, 512, "Test", NULL, NULL);
+		if (!window) {
+			glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
+			glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
+			glVers = VERSION_2_1;
+			window = glfwCreateWindow(512, 512, "Test", NULL, NULL);
+			if (!window) {
+				exit(EXIT_FAILURE);
+			}
+		}
 	}
 	glfwMakeContextCurrent(window);
 
