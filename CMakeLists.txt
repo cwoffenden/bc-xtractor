@@ -96,7 +96,7 @@ set_property(TARGET ${CMAKE_PROJECT_NAME} PROPERTY CXX_STANDARD 98)
 # adding a CPATH the shell's profile.
 
 find_package(glfw3 REQUIRED)
-target_link_libraries(${CMAKE_PROJECT_NAME} PUBLIC glfw3)
+target_link_libraries(${CMAKE_PROJECT_NAME} PUBLIC glfw)
 find_package(OpenGL REQUIRED)
 target_link_libraries(${CMAKE_PROJECT_NAME} PUBLIC OpenGL::GL)
 if (APPLE)
