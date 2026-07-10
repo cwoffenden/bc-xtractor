@@ -34,7 +34,7 @@
  */
 enum GLVersion {
 	VERSION_NONE, /**< No valid context. */
-	VERSION_2_1,  /**< Legacy GL without VAO support. */
+	VERSION_2_0,  /**< Legacy GL without VAO support. */
 	VERSION_3_3,  /**< Most compatible pre-compute shader GL */
 	VERSION_4_3,  /**< Gl with compute shaders. */
 } glVers;
@@ -904,6 +904,8 @@ GLchar const vertShaderTexture150[] =
 /**
  * GLSL 1.20 compatible fragment shader, designed only to draw a fullscreen
  * textured quad.
+ *
+ * /todo GL2.0 might only have 1.10 support (previously solved)
  */
 GLchar const fragShaderTexture120[] =
 	"#version 120\n"
@@ -1059,7 +1061,7 @@ void createTexturedQuad() {
 	 * for newer GL, otherwise the VBO fails).
 	 */
 #ifdef GL_VERSION_3_0
-	if (glVers > VERSION_2_1) {
+	if (glVers > VERSION_2_0) {
 		glGenVertexArrays(1, &vaoId);
 		glBindVertexArray(vaoId);
 	}
@@ -1078,7 +1080,7 @@ void deleteTexturedQuad() {
 	glDeleteBuffers(1, &vboId);
 	vaoId = 0;
 #ifdef GL_VERSION_3_0
-	if (glVers > VERSION_2_1) {
+	if (glVers > VERSION_2_0) {
 		glDeleteVertexArrays(1, &vaoId);
 		vboId = 0;
 	}
@@ -1089,7 +1091,7 @@ void initFramebufferTest() {
 #ifndef DEBUG_DRAW_QUAD
 	createFramebuffer(SWEEP_BC1, SWEEP_BC1);
 #endif
-	if (glVers > VERSION_2_1) {
+	if (glVers > VERSION_2_0) {
 		createVertFragShaders(vertShaderTexture150, fragShaderTexture150);
 	} else {
 		createVertFragShaders(vertShaderTexture120, fragShaderTexture120);
@@ -1184,21 +1186,21 @@ GLFWwindow* createGlfwContext(bool show = false) {
 	 * GLFW_OPENGL_FORWARD_COMPAT, so we avoid any other hints.
 	 *
 	 * 4.3 is the minimum for a compute shader (4.1 the maximum for Mac), 3.3
-	 * for the fallback with a framebuffer, 2.1 the oldest supported.
+	 * for the fallback with a framebuffer, 2.0 the oldest supported.
 	 */
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
 	glVers = VERSION_4_3;
 	GLFWwindow* window = glfwCreateWindow(512, 512, "Test", NULL, NULL);
 	if (!window) {
-		glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+		glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 5);
 		glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
 		glVers = VERSION_3_3;
 		window = glfwCreateWindow(512, 512, "Test", NULL, NULL);
 		if (!window) {
 			glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
 			glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
-			glVers = VERSION_2_1;
+			glVers = VERSION_2_0;
 			window = glfwCreateWindow(512, 512, "Test", NULL, NULL);
 			if (!window) {
 				puts("Unable to create a GL context");
@@ -1240,7 +1242,7 @@ void runSweepTestRed(GLuint txId, RGBAf32* const rgba, unsigned const size) {
 
 void runValidateFramebuffer(GLFWwindow* /*window*/) {
 	// Common shaders and fullscreen quad
-	if (glVers > VERSION_2_1) {
+	if (glVers > VERSION_2_0) {
 		createVertFragShaders(vertShaderTexture150, fragShaderTexture150);
 	} else {
 		createVertFragShaders(vertShaderTexture120, fragShaderTexture120);
