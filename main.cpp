@@ -331,7 +331,7 @@ void fillBC4Block(BCBlock* block, unsigned val0, unsigned val1) {
  *
  * \return \c true if the texture's first mipmap level is compressed
  */
-bool currentBoundIsCompressed() {
+bool isCurrentBoundCompressed() {
 	GLint valid = GL_FALSE;
 	glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_COMPRESSED, &valid);
 	return valid == GL_TRUE;
@@ -407,7 +407,7 @@ unsigned createBC1(GLuint txId, unsigned min0, unsigned max0, unsigned min1, uns
 		filterClampBoilerplate();
 		glFlush();
 		delete[] blocks;
-		if (currentBoundIsCompressed()) {
+		if (isCurrentBoundCompressed()) {
 			return count;
 		}
 	}
@@ -514,7 +514,7 @@ unsigned createBC4(GLuint txId, unsigned min0, unsigned max0, unsigned min1, uns
 		filterClampBoilerplate();
 		glFlush();
 		delete[] blocks;
-		if (currentBoundIsCompressed()) {
+		if (isCurrentBoundCompressed()) {
 			return count;
 		}
 	}
