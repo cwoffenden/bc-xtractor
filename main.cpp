@@ -338,28 +338,14 @@ bool isCurrentBoundCompressed() {
 }
 
 /**
- * Tests whether the currently bound texture has valid  component data.
+ * Tests whether the currently bound texture has has dimensions greater than
+ * zero (and this contains valid content).
  *
- * \param[in] channel which channel to query
- * \return \c true if the texture's first mipmap level has the specified component
+ * \return \c true if the texture's first mipmap level has content
  */
-bool currentBoundHasData(GLenum channel = GL_RED) {
-	GLenum chEnum;
-	switch (channel) {
-	case GL_RED:
-		chEnum = GL_TEXTURE_RED_SIZE;
-		break;
-	case GL_GREEN:
-		chEnum = GL_TEXTURE_GREEN_SIZE;
-		break;
-	case GL_BLUE:
-		chEnum = GL_TEXTURE_BLUE_SIZE;
-		break;
-	default:
-		chEnum = GL_TEXTURE_ALPHA_SIZE;
-	}
+bool isCurrentBoundValid() {
 	GLint size = 0;
-	glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, chEnum, &size);
+	glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &size);
 	return size > 0;
 }
 
@@ -557,6 +543,18 @@ void create4x4BC4Red(GLuint txId) {
 //**************************** Buffer Verification ****************************/
 
 /**
+ * \def SWEEP_BC3
+ * Test texture size large enough to extract all BC1 and BC3 variations.
+ */
+#define SWEEP_BC1 256
+
+/**
+ * \def SWEEP_BC3
+ * Test texture size large enough to extract all BC4 variations.
+ */
+#define SWEEP_BC4 1024
+
+/**
  * Matches the GL type for a given data type, e.g. \c GL_BYTE for \c int8_t
  * (with only support for 8- and 16-bit integer types).
  *
@@ -564,7 +562,7 @@ void create4x4BC4Red(GLuint txId) {
  * \return matching GL data type
  */
 template<typename T>
-GLenum getDataType() {
+static GLenum getDataType() {
 	unsigned max(std::numeric_limits<T>::max());
 	if (max == INT8_MAX) {
 		return GL_BYTE;
@@ -584,12 +582,17 @@ GLenum getDataType() {
 	return GL_NONE;
 }
 
-/*
+/**
+ * Normalises \a val following the GL rules.
+ *
  * \note Currently supporting only modern GL-style normalisation.
+ *
  * \tparam T fixed-width integer type
+ * \param[in] val integer value to normalise
+ * \return \a val in the range of \c -1.0 to \c 1.0
  */
 template<typename T>
-float normalize(T val) {
+static float normalize(T const val) {
 	unsigned max(std::numeric_limits<T>::max());
 	if (max == INT8_MAX) {
 		return std::max(val / float(INT8_MAX), -1.0f);
@@ -610,16 +613,33 @@ float normalize(T val) {
 }
 
 /**
- * \def SWEEP_BC3
- * Test texture size large enough to extract all BC1 and BC3 variations.
+ * Helper to perform the work of calculating the next sweep value.
+ *
+ * \tparam T data type, tested with \c uint8_t and \c uint16_t
+ * \param[in] idx running pixel index (incremented each iteration in the calling code)
+ * \param[in] x x-axis coordinate
+ * \param[in] y y-axis coordinate
+ * \param[in] comp component index, ranging from \0 to \c 3
+ * \return a single component in the sweep texture pattern
  */
-#define SWEEP_BC1 256
-
-/**
- * \def SWEEP_BC3
- * Test texture size large enough to extract all BC4 variations.
- */
-#define SWEEP_BC4 1024
+template<typename T>
+static T calcSweepVal(unsigned const idx, unsigned const x, unsigned const y, unsigned const comp) {
+	T val;
+	if ((y & 1)) {
+		if ((x & 1)) {
+			val = static_cast<T>((~idx >> 3) + comp);
+		} else {
+			val = static_cast<T>(( idx >> 3) - comp);
+		}
+	} else {
+		if ((x & 1)) {
+			val = static_cast<T>(( idx >> 3) + comp);
+		} else {
+			val = static_cast<T>((~idx >> 3) - comp);
+		}
+	}
+	return val;
+}
 
 /**
  * Creates a test texture with a known pattern sweeping the range of possible
@@ -636,35 +656,28 @@ float normalize(T val) {
  * \return \c true if texture creation was successful and \a txId has valid content
  */
 template<typename T>
-bool createTestSweepRed(GLuint txId, unsigned const size) {
+bool createTestSweep(GLuint const txId, unsigned const size) {
 	assert(txId && size);
-	T* const pixels = new T[size * size];
+	T* const pixels = new T[size * size * 4];
 	unsigned idxVal = 0;
 	for (unsigned y = 0; y < size; y++) {
 		for (unsigned x = 0; x < size; x++) {
-			T val;
-			if ((y & 1)) {
-				val = static_cast<T>(((idxVal & 1) ? ~idxVal :  idxVal) >> 1);
-			} else {
-				val = static_cast<T>(((idxVal & 1) ?  idxVal : ~idxVal) >> 1);
+			for (unsigned comp = 0; comp < 4; comp++) {
+				T val = calcSweepVal<T>(idxVal, x, y, comp);
+				pixels[idxVal++] = val;
 			}
-			pixels[idxVal++] = val;
 		}
 	}
 	glBindTexture(GL_TEXTURE_2D, txId);
-#ifndef GL_VERSION_3_0
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, size, size, 0, GL_LUMINANCE, getDataType<T>(), pixels);
-#else
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RED,       size, size, 0, GL_RED,       getDataType<T>(), pixels);
-#endif
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, size, size, 0, GL_RGBA, getDataType<T>(), pixels);
 	filterClampBoilerplate();
 	glFlush();
 	delete[] pixels;
-	return true;//currentBoundHasData(GL_RED);
+	return isCurrentBoundValid();
 }
 
 /**
- * Verifies the read back of \c #createTestSweepRed() after copying the texture
+ * Verifies the read back of \c #createTestSweep() after copying the texture
  * content into a buffer.
  *
  * \tparam T data type, tested with \c uint8_t and \c uint16_t
@@ -673,29 +686,28 @@ bool createTestSweepRed(GLuint txId, unsigned const size) {
  * \return \c true if verification was successful
  */
 template<typename T>
-bool verifyTestSweepRed(RGBAf32* const rgba, unsigned const size) {
+bool verifyTestSweep(RGBAf32* const rgba, unsigned const size) {
 	assert(rgba && size);
 	unsigned idxVal = 0;
 	for (unsigned y = 0; y < size; y++) {
 		for (unsigned x = 0; x < size; x++) {
-			T val;
-			if ((y & 1)) {
-				val = static_cast<T>(((idxVal & 1) ? ~idxVal :  idxVal) >> 1);
-			} else {
-				val = static_cast<T>(((idxVal & 1) ?  idxVal : ~idxVal) >> 1);
+			for (unsigned comp = 0; comp < 4; comp++) {
+				T val = calcSweepVal<T>(idxVal, x, y, comp);
+				float normVal = normalize<T>(val);
+				float rgbaComp = (*rgba)[idxVal];
+				if (normVal != rgbaComp) {
+					printf("Expected %0.8f (0x%08X), found %0.8f (0x%08X) at %d,%d[%d]\n",
+						normVal, val, rgbaComp, floatBits(rgbaComp), x, y, comp);
+					return false;
+				}
+				idxVal++;
 			}
-			float valN = normalize<T>(val);
-			float redF = rgba[idxVal].r;
-			if (valN != redF) {
-				printf("Expected %0.8f (0x%08X) found %0.8f (0x%08X) @ %d,%d\n",
-					valN, val, redF, floatBits(redF), x, y);
-				return false;
-			}
-			idxVal++;
 		}
 	}
 	return true;
 }
+
+//*****************************************************************************/
 
 #if 0
 void bc3RedTest() {
@@ -859,11 +871,10 @@ enum VertexID {
 };
 
 /**
- * GLSL 1.20 compatible vertex shader, designed only to draw a fullscreen
+ * GLSL 1.10 compatible vertex shader, designed only to draw a fullscreen
  * textured quad.
  */
-GLchar const vertShaderTexture120[] =
-	"#version 120\n"
+GLchar const vertShaderTexture110[] =
 	"attribute vec2 aPosn;\n"
 	"attribute vec2 aTex0;\n"
 	"varying vec2 vTex0;\n"
@@ -873,7 +884,7 @@ GLchar const vertShaderTexture120[] =
 	"}\n";
 
 /**
- * GLSL 1.50 version of the \c #vertShaderTexture120 quad shader.
+ * GLSL 1.50 version of the \c #vertShaderTexture110 quad shader.
  */
 GLchar const vertShaderTexture150[] =
 	"#version 150\n"
@@ -886,22 +897,18 @@ GLchar const vertShaderTexture150[] =
 	"}\n";
 
 /**
- * GLSL 1.20 compatible fragment shader, designed only to draw a fullscreen
+ * GLSL 1.10 compatible fragment shader, designed only to draw a fullscreen
  * textured quad.
- *
- * /todo GL2.0 might only have 1.10 support (previously solved)
  */
-GLchar const fragShaderTexture120[] =
-	"#version 120\n"
+GLchar const fragShaderTexture110[] =
 	"uniform sampler2D srcTx;\n"
 	"varying vec2 vTex0;\n"
 	"void main() {\n"
-	"	vec4 tex0rgb = texture2D(srcTx, vTex0);\n"
-	"	gl_FragColor = tex0rgb;\n"
+	"	gl_FragColor = texture2D(srcTx, vTex0);\n"
 	"}\n";
 
 /**
- * GLSL 1.50 version of the \c #fragShaderTexture120 quad shader.
+ * GLSL 1.50 version of the \c #fragShaderTexture110 quad shader.
  */
 GLchar const fragShaderTexture150[] =
 	"#version 150\n"
@@ -910,8 +917,7 @@ GLchar const fragShaderTexture150[] =
 	"in vec2 vTex0;\n"
 	"out vec4 FragColor;\n"
 	"void main() {\n"
-	"	vec4 tex0rgb = texture(srcTx, vTex0);\n"
-	"	FragColor = tex0rgb;\n"
+	"	FragColor = texture(srcTx, vTex0);\n"
 	"}\n";
 
 GLuint progId = 0; /**< Program ID. */
@@ -992,7 +998,7 @@ bool createFramebuffer(unsigned bufW, unsigned bufH, GLint format = GL_RGBA32F, 
 	glBindTexture(GL_TEXTURE_2D, fbTxId);
 	glTexImage2D(GL_TEXTURE_2D, 0, format, bufW, bufH, 0, GL_RGBA, type, NULL);
 	filterClampBoilerplate();
-	bool valid = currentBoundHasData();
+	bool valid = isCurrentBoundValid();
 	glBindTexture(GL_TEXTURE_2D, 0);
 	if (valid) {
 		glGenFramebuffers(1, &fbufId);
@@ -1078,14 +1084,12 @@ void initFramebufferTest() {
 	if (glVers > VERSION_2_0) {
 		createVertFragShaders(vertShaderTexture150, fragShaderTexture150);
 	} else {
-		createVertFragShaders(vertShaderTexture120, fragShaderTexture120);
+		createVertFragShaders(vertShaderTexture110, fragShaderTexture110);
 	}
 
 	GLuint txName = 0;
 	glGenTextures(1, &txName);
-	//create4x4BC1Red(txName);
-	createTestSweepRed<uint8_t>(txName, SWEEP_BC1);
-
+	createTestSweep<uint8_t>(txName, SWEEP_BC4);
 	createTexturedQuad();
 }
 
@@ -1177,7 +1181,7 @@ GLFWwindow* createGlfwContext(bool show = false) {
 	glVers = VERSION_4_3;
 	GLFWwindow* window = glfwCreateWindow(512, 512, "Test", NULL, NULL);
 	if (!window) {
-		glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 5);
+		glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
 		glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
 		glVers = VERSION_3_3;
 		window = glfwCreateWindow(512, 512, "Test", NULL, NULL);
@@ -1201,8 +1205,9 @@ GLFWwindow* createGlfwContext(bool show = false) {
 }
 
 template<typename T>
-void runSweepTestRed(GLuint txId, RGBAf32* const rgba, unsigned const size) {
-	if (createTestSweepRed<uint8_t>(txId, size)) {
+bool drawFramebufferSweepTest(GLuint txId, RGBAf32* const rgba, unsigned const size) {
+	bool success = false;
+	if (createTestSweep<T>(txId, size)) {
 		glViewport(0, 0, size, size);
 		glClear(GL_COLOR_BUFFER_BIT);
 		/*
@@ -1214,14 +1219,31 @@ void runSweepTestRed(GLuint txId, RGBAf32* const rgba, unsigned const size) {
 
 		glBindTexture(GL_TEXTURE_2D, fbTxId);
 		glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_FLOAT, rgba);
-		if (verifyTestSweepRed<uint8_t>(rgba, size)) {
+		success = verifyTestSweep<T>(rgba, size);
+		if (success) {
 			puts("Success!");
-		} else {
-			puts("Failed...");
 		}
 	} else {
-		puts("Failed to create test sweep");
+		puts("Failed to create sweep texture");
 	}
+	return success;
+}
+
+bool runFramebufferSweepTest(RGBAf32* const rgba, unsigned const size, const char* name) {
+	bool success = false;
+	if (createFramebuffer(size, size)) {
+		GLuint sweepTx = 0;
+		glGenTextures(1, &sweepTx);
+		printf("Running %s byte readback test\n", name);
+		success = drawFramebufferSweepTest<uint8_t>(sweepTx, rgba, size);
+		if (success) {
+			printf("Running %s short readback test\n", name);
+			success = drawFramebufferSweepTest<uint16_t>(sweepTx, rgba, size);
+		}
+		glDeleteTextures(1, &sweepTx);
+		deleteFramebuffer();
+	}
+	return success;
 }
 
 void runValidateFramebuffer(GLFWwindow* /*window*/) {
@@ -1229,18 +1251,13 @@ void runValidateFramebuffer(GLFWwindow* /*window*/) {
 	if (glVers > VERSION_2_0) {
 		createVertFragShaders(vertShaderTexture150, fragShaderTexture150);
 	} else {
-		createVertFragShaders(vertShaderTexture120, fragShaderTexture120);
+		createVertFragShaders(vertShaderTexture110, fragShaderTexture110);
 	}
 	createTexturedQuad();
 	// Buffer large enough for all tests
 	RGBAf32* const rgba = new RGBAf32[SWEEP_BC4 * SWEEP_BC4];
-
-	if (createFramebuffer(SWEEP_BC1, SWEEP_BC1)) {
-		GLuint sweepTx = 0;
-		glGenTextures(1, &sweepTx);
-		runSweepTestRed<uint8_t>(sweepTx, rgba, SWEEP_BC1);
-		runSweepTestRed<uint16_t>(sweepTx, rgba, SWEEP_BC1);
-	}
+	runFramebufferSweepTest(rgba, SWEEP_BC1, "256x256");
+	runFramebufferSweepTest(rgba, SWEEP_BC4, "1024x1024");
 	delete[] rgba;
 }
 
