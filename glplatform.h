@@ -44,12 +44,28 @@
 #endif
 
 #ifndef GL_VERSION_3_0
+#ifndef GL_FRAMEBUFFER
 #define GL_FRAMEBUFFER GL_FRAMEBUFFER_EXT
+#endif
+#ifndef GL_COLOR_ATTACHMENT0
 #define GL_COLOR_ATTACHMENT0 GL_COLOR_ATTACHMENT0_EXT
+#endif
+#ifndef GL_FRAMEBUFFER_COMPLETE
 #define GL_FRAMEBUFFER_COMPLETE GL_FRAMEBUFFER_COMPLETE_EXT
+#endif
+#ifndef glBindFramebuffer
 #define glBindFramebuffer glBindFramebufferEXT
+#endif
+#ifndef glDeleteFramebuffers
 #define glDeleteFramebuffers glDeleteFramebuffersEXT
+#endif
+#ifndef glGenFramebuffers
 #define glGenFramebuffers glGenFramebuffersEXT
+#endif
+#ifndef glCheckFramebufferStatus
 #define glCheckFramebufferStatus glCheckFramebufferStatusEXT
+#endif
+#ifndef glFramebufferTexture2D
 #define glFramebufferTexture2D glFramebufferTexture2DEXT
+#endif
 #endif
