@@ -1,43 +1,13 @@
 /**
- * \file utils/rgba.h
+ * \file rgba.h
  * Pixel helpers.
  */
 #pragma once
 
-#define __STDC_LIMIT_MACROS
-#include <stdint.h>
-#include <cstddef>
+#include "defines.h"
+
 #include <cstring>
 #include <algorithm>
-
-//***************************** Compiler Helpers ******************************/
-
-/**
- * \def __has_feature
- * Dummy \c __has_feature implementation for when not using Clang (in which case
- * all requested features are reported as unimplemented).
- *
- * \param feature compiler feature to query
- */
-#ifndef __has_feature
-#ifndef __SNC__
-#define __has_feature(feature) 0
-#endif
-#endif
-
-/**
- * \def _Nonnull
- * Qualifier that marks a pointer as \e never being \c null (see also \c
- * #_Nullable). Valid for both parameters and return values.
- *
- * \note This is a Clang-only feature
- * \sa https://clang.llvm.org/docs/AttributeReference.html#nullability-attributes
- */
-#ifndef _Nonnull
-#if !__has_feature(nullability)
-#define _Nonnull
-#endif
-#endif
 
 //*****************************************************************************/
 

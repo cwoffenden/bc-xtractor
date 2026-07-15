@@ -4,6 +4,8 @@
  */
 #pragma once
 
+#include "defines.h"
+
 /*
  * Notes for Mac: GLFW_INCLUDE_GLCOREARB will include gl3.h, which with a GL2
  * context will fail for calls to glGenVertexArrays, etc., (invalid operation),
