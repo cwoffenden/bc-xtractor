@@ -91,11 +91,6 @@ add_executable(${CMAKE_PROJECT_NAME} ${INCS} ${SRCS})
 set_property(TARGET ${CMAKE_PROJECT_NAME} PROPERTY CXX_STANDARD 98)
 add_compile_definitions(__STDC_LIMIT_MACROS)
 
-# Note to future self: older Mac GCCs don't include "/usr/local/include" by
-# default, and GLFW's CMake config files don't add the library (at least for
-# Makefile builds) so it will fail to find to find the header. Fix this by
-# adding a CPATH the shell's profile.
-
 find_package(glfw3 REQUIRED)
 target_link_libraries(${CMAKE_PROJECT_NAME} PUBLIC glfw)
 find_package(OpenGL REQUIRED)
