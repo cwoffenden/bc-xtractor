@@ -80,12 +80,12 @@ void createTexturedQuad(ContextVersion const glVers, GLuint& vaoId, GLuint& vboI
 	 * simple example a VAO isn't used (but it is necessary to have one bound
 	 * for newer GL, otherwise the VBO fails).
 	 */
-#ifdef GL_VERSION_3_0
 	if (glVers > VERSION_2_0) {
+	#ifdef GL_VERSION_3_0
 		glGenVertexArrays(1, &vaoId);
 		glBindVertexArray(vaoId);
+	#endif
 	}
-#endif
 	glGenBuffers(1, &vboId);
 	glBindBuffer(GL_ARRAY_BUFFER, vboId);
 	glBufferData(GL_ARRAY_BUFFER, sizeof(verts), verts, GL_STATIC_DRAW);

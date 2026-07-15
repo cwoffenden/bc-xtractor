@@ -901,7 +901,9 @@ GLFWwindow* createGlfwContext(unsigned winW, unsigned winH, bool show = false) {
 	}
 	if (!show) {
 		glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
+	#if __MAC_OS_X_VERSION_MIN_REQUIRED >= 1070
 		glfwWindowHint(GLFW_COCOA_GRAPHICS_SWITCHING, GLFW_FALSE);
+	#endif
 	}
 	/*
 	 * We try to create a compute shader compatible context, with retries for
