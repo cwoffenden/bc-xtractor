@@ -6,7 +6,8 @@ a.out
 *.js
 *.wasm
 
-.vs/
 .idea
-out/
+.vs/
+cmake*/
 build/
+out/
