@@ -209,7 +209,7 @@ void showDebugView(GLFWwindow* const window, ContextVersion const glVers) {
 	GLuint vboId = 0;
 	createTexturedQuad(glVers, vaoId, vboId, true);
 	createDebugTextures();
-	unsigned showingTxIdx = DEBUG_4x4_RGBx4_RED;
+	unsigned showingTxIdx = DEBUG_TEXTURE_COUNT;
 	unsigned showingTicks = 0;
 	while (!glfwWindowShouldClose(window)) {
 		int fbW, fbH;
@@ -221,7 +221,7 @@ void showDebugView(GLFWwindow* const window, ContextVersion const glVers) {
 			showingTicks = 120;
 			showingTxIdx++;
 			if (showingTxIdx >= DEBUG_TEXTURE_COUNT) {
-				showingTxIdx = DEBUG_4x4_RGBx4_RED;
+				showingTxIdx  = DEBUG_4x4_RGBx4_RED;
 			}
 			glBindTexture(GL_TEXTURE_2D, texture[showingTxIdx]);
 			if (doesBoundTextureHaveContent()) {

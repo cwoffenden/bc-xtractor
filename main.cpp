@@ -605,6 +605,7 @@ GLFWwindow* createGlfwContext(unsigned winW, unsigned winH, bool show = false) {
 		}
 	}
 	glfwMakeContextCurrent(window);
+	glfwSwapInterval(1);
 #ifdef GL_VERSION_4_3
 	glDebugMessageCallback(debugCallback, NULL);
 	glEnable(GL_DEBUG_OUTPUT);

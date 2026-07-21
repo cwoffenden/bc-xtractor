@@ -60,7 +60,7 @@ union BC1Block {
 			/**
 			 * Raw texel data.
 			 */
-			uint32_t __unused texels;
+			uint32_t texels __unused;
 		#ifndef NDEBUG
 			/**
 			 * Texel rows.
@@ -77,7 +77,7 @@ union BC1Block {
 	/**
 	 * The block as a single 128-bit value.
 	 */
-	uint64_t __unused data;
+	uint64_t data __unused;
 	/**
 	 * An uninitialised block.
 	 */
@@ -103,7 +103,7 @@ union BC4Block {
 		/**
 		 * Raw texel data.
 		 */
-		uint64_t __unused texels: 48;
+		uint64_t texels: 48 __unused;
 	};
 	struct {
 		/**
@@ -137,7 +137,7 @@ union BC4Block {
 	/**
 	 * The block as a single 128-bit value.
 	 */
-	uint64_t __unused data;
+	uint64_t data __unused;
 	/**
 	 * An uninitialised block.
 	 */

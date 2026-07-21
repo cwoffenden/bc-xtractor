@@ -86,6 +86,8 @@ void createTexturedQuad(ContextVersion const glVers, GLuint& vaoId, GLuint& vboI
 	#ifdef GL_VERSION_3_0
 		glGenVertexArrays(1, &vaoId);
 		glBindVertexArray(vaoId);
+	#else
+		(void) vaoId;
 	#endif
 	}
 	glGenBuffers(1, &vboId);
