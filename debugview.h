@@ -10,7 +10,7 @@
  * Cycles through debug textures. To be manually verified, the textures should
  * show correct RGB ordering and compressed decoding.
  *
- * \note Control will return to the callee after the window has close.
+ * \note Control will return to the callee after the window has closed.
  *
  * \param[in] glVers Context version acquired at start-up
  * \param[in] window GLFW window with a valid context

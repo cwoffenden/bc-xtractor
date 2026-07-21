@@ -63,16 +63,18 @@ void deleteVertFragShaders(Program& prog) {
 	prog.fragId = 0;
 }
 
-void createTexturedQuad(ContextVersion const glVers, GLuint& vaoId, GLuint& vboId) {
-	assert(vaoId == 0);
+void createTexturedQuad(ContextVersion const glVers, GLuint& vaoId, GLuint& vboId, bool const flip) {
+	assert(vboId == 0);
+	float const top = (flip) ? 0.0f : 1.0f;
+	float const bot = (flip) ? 1.0f : 0.0f;
 	float const verts[]= {
-		1.0f,  1.0f, 1.0f, 1.0f, // TR
-	   -1.0f,  1.0f, 0.0f, 1.0f, // TL
-	   -1.0f, -1.0f, 0.0f, 0.0f, // BL
+		1.0f,  1.0f, 1.0f, top, // TR
+	   -1.0f,  1.0f, 0.0f, top, // TL
+	   -1.0f, -1.0f, 0.0f, bot, // BL
 
-	   -1.0f, -1.0f, 0.0f, 0.0f, // BL
-		1.0f, -1.0f, 1.0f, 0.0f, // BR
-		1.0f,  1.0f, 1.0f, 1.0f, // TR
+	   -1.0f, -1.0f, 0.0f, bot, // BL
+		1.0f, -1.0f, 1.0f, bot, // BR
+		1.0f,  1.0f, 1.0f, top, // TR
    };
 	/*
 	 * Mac with GL2.1 and the GL3 header will fail here. Using the GL2 header
@@ -94,6 +96,20 @@ void createTexturedQuad(ContextVersion const glVers, GLuint& vaoId, GLuint& vboI
 	glVertexAttribPointer(VERT_TEX0_ID, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), reinterpret_cast<void*>(2 * sizeof(float)));
 	glEnableVertexAttribArray(VERT_TEX0_ID);
 	assert(glGetError() == 0);
+}
+
+void deleteTexturedQuad(ContextVersion const glVers, GLuint& vaoId, GLuint& vboId) {
+	assert(vboId != 0);
+	if (glVers > VERSION_2_0) {
+#ifdef GL_VERSION_3_0
+		glBindVertexArray(0);
+		glDeleteVertexArrays(1, &vaoId);
+#endif
+		vaoId = 0;
+	}
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glDeleteBuffers(1, &vboId);
+	vboId = 0;
 }
 
 void filterClampBoilerplate() {

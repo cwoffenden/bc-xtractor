@@ -1,114 +1,247 @@
 #include "debugview.h"
 
 #include <cassert>
+#include <cstdio>
 
 #include "bcgen.h"
 
+namespace /*anonymous*/ {
+/**
+ * Choice of debug textures to cycle through, potentially showing gaps in format
+ * support (and memory layout).
+ */
 enum DebugTexture {
-	DEBUG_RED_4x4_RGBA,
-	DEBUG_RED_4x4_BC1,
-	DEBUG_RED_4x4_BC3,
-	DEBUG_RED_4x4_BC4,
-	DEBUG_GREEN_4x4_RGBA,
-	DEBUG_GREEN_4x4_BC1,
-	DEBUG_GREEN_4x4_BC3,
-	DEBUG_GREEN_4x4_BC5,
-	DEBUG_BLUE_4x4_RGBA,
-	DEBUG_BLUE_4x4_BC1,
-	DEBUG_BLUE_4x4_BC3,
+	DEBUG_INVALID_RED = 0, /**< Placeholder texture to show if generation fails. */
+	DEBUG_4x4_RGBx4_RED,   /**<  4x4 8-bit RGBA texture with a red-only 4-colour pattern. */
+	DEBUG_4x4_BC1_RED,     /**<  BC1 approximating <tt>DEBUG_4x4_RGBx4_RED</tt>. */
+	DEBUG_4x4_BC3_RED,     /**<  BC3 approximating <tt>DEBUG_4x4_RGBx4_RED</tt>. */
+	DEBUG_4x4_RGBx8_RED,   /**<  4x4 8-bit RGBA texture with a red-only 8-colour pattern. */
+	DEBUG_4x4_BC4_RED,     /**<  BC4 approximating <tt>DEBUG_4x4_RGBx8_RED</tt>. */
+	DEBUG_4x4_BC5_RED,     /**<  BC5 approximating <tt>DEBUG_4x4_RGBx8_RED</tt>. */
+	DEBUG_4x4_RGBx4_GREEN, /**<  4x4 8-bit RGBA texture with a green-only 4-colour pattern. */
+	DEBUG_4x4_BC1_GREEN,   /**<  BC1 approximating <tt>DEBUG_4x4_RGBx4_GREEN</tt>. */
+	DEBUG_4x4_BC3_GREEN,   /**<  BC3 approximating <tt>DEBUG_4x4_RGBx4_GREEN</tt>. */
+	DEBUG_4x4_RGBx8_GREEN, /**<  4x4 8-bit RGBA texture with a green-only 8-colour pattern. */
+	DEBUG_4x4_BC5_GREEN,   /**<  BC5 approximating <tt>DEBUG_4x4_RGBx8_GREEN</tt>. */
+	DEBUG_4x4_RGBx4_BLUE,  /**<  4x4 8-bit RGBA texture with a blue-only 8-colour pattern. */
+	DEBUG_4x4_BC1_BLUE,    /**<  BC1 approximating <tt>DEBUG_4x4_RGBx4_BLUE</tt>. */
+	DEBUG_4x4_BC3_BLUE,    /**<  BC1 approximating <tt>DEBUG_4x4_RGBx4_BLUE</tt>. */
+	DEBUG_TEXTURE_COUNT    /**<  Number of debug textures. */
 };
 
-//**************************** BC Block Generation ****************************/
+/**
+ * Debug texture IDs.
+ */
+GLuint texture[DEBUG_TEXTURE_COUNT] = {};
+
+//******************************** Test Blocks ********************************/
 
 /**
- * Creates a 4x4 compressed BC3 texture with known values for testing
- * (purposefully choosing the \e mode with a single interpolated colour).
+ * Creates a 4x4 uncompressed 8-bit RGB texture with ideal BC3 values.
  *
  * \param[in] txId pre-generated texture ID to use
+ * \param[in] fill which colour channel to use (e.g.: <tt>GL_RED</tt>)
  */
-static void create4x4BC1Red(GLuint txId) {
-	unsigned count = createBC1(txId, 15, 15, 31, 31, GL_RED);
-	assert(count);
-}
-
-/**
- * Creates a 4x4 compressed BC3 texture with known values for testing.
- *
- * \param[in] txId pre-generated texture ID to use
- */
-static void create4x4BC3Red(GLuint txId) {
-	unsigned count = createBC3(txId, 31, 31, 0, 0, GL_RED);
-	assert(count);
-}
-
-/**
- * Creates a 4x4 compressed BC4 texture with known values for testing.
- *
- * \param[in] txId pre-generated texture ID to use
- */
-void create4x4BC4Red(GLuint txId) {
-	unsigned count = createBC4(txId, 255, 255, 0, 0);
-	assert(count);
-}
-
-//******************************** RGB Blocks *********************************/
-
-/**
- * Creates a 4x4 red-only uncompressed 8-bit texture with ideal BC3 values.
- *
- * \param[in] txId pre-generated texture ID to use
- */
-void create4x4RedBC3Vals(GLuint const txId) {
+void create4x4BC3Vals(GLuint const txId, GLenum const fill) {
 	assert(txId);
+	assert(fill >= GL_RED && fill <= GL_BLUE);
 	glBindTexture(GL_TEXTURE_2D, txId);
-	uint8_t const block[16] = {
-		0xFF, 0x00, 0xAA, 0x55,
-		0x00, 0xAA, 0x55, 0xFF,
-		0xAA, 0x55, 0xFF, 0x00,
-		0x55, 0xFF, 0x00, 0xAA
+	uint8_t const block[4 * 4 * 3 + 2] = {
+		0x00, 0x00, // Extra two bytes to offset red and green
+		0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0xAA, 0x00, 0x00, 0x55, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0xAA, 0x00, 0x00, 0x55, 0x00, 0x00, 0xFF, 0x00, 0x00,
+		0xAA, 0x00, 0x00, 0x55, 0x00, 0x00, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x55, 0x00, 0x00, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0xAA, 0x00, 0x00
 	};
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, 4, 4, 0, GL_RED, GL_UNSIGNED_BYTE, block);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 4, 4, 0, GL_RGB, GL_UNSIGNED_BYTE, block + (GL_BLUE - fill));
 	filterClampBoilerplate();
 }
 
 /**
- * Creates a 4x4 red-only uncompressed 8-bit texture with ideal BC4 values.
+ * Creates a 4x4 uncompressed 8-bit RGB texture with ideal BC4 values.
+ *
+ * \note This will create a \c GL_BLUE fill but blue is not valid for BC5.
  *
  * \param[in] txId pre-generated texture ID to use
+ * \param[in] fill which colour channel to use (e.g.: <tt>GL_RED</tt>)
  */
-void create4x4RedBC4Vals(GLuint const txId) {
+void create4x4BC4Vals(GLuint const txId, GLenum const fill) {
 	assert(txId);
+	assert(fill >= GL_RED && fill <= GL_BLUE);
 	glBindTexture(GL_TEXTURE_2D, txId);
-	uint8_t const block[16] = {
-		0xFF, 0x00, 0xDB, 0xB6,
-		0x92, 0x6D, 0x49, 0x24,
-		0x24, 0x49, 0x6D, 0x92,
-		0xB6, 0xDB, 0x00, 0xFF
+	uint8_t const block[4 * 4 * 3 + 2] = {
+		0x00, 0x00, // Extra two bytes to offset red and green
+		0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0xDB, 0x00, 0x00, 0xB6, 0x00, 0x00,
+		0x92, 0x00, 0x00, 0x6D, 0x00, 0x00, 0x49, 0x00, 0x00, 0x24, 0x00, 0x00,
+		0x24, 0x00, 0x00, 0x49, 0x00, 0x00, 0x6D, 0x00, 0x00, 0x92, 0x00, 0x00,
+		0xB6, 0x00, 0x00, 0xDB, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0x00, 0x00
 	};
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, 4, 4, 0, GL_RED, GL_UNSIGNED_BYTE, block);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 4, 4, 0, GL_RGB, GL_UNSIGNED_BYTE, block + (GL_BLUE - fill));
 	filterClampBoilerplate();
+}
+
+/**
+ * Placeholder texture to denote failure (white background with a line through).
+ * Unlike the other RGB-only textures, this is RGBA which should ensure
+ * universal compatibility.
+ *
+ * \param[in] txId pre-generated texture ID to use
+ * \param[in] fill which colour channel to use (e.g.: <tt>GL_RED</tt>)
+ */
+void create4x4Invalid(GLuint const txId, GLenum const fill) {
+	assert(txId);
+	assert(fill >= GL_RED && fill <= GL_BLUE);
+	uint8_t pixR = 0x00;
+	uint8_t pixG = 0x00;
+	uint8_t pixB = 0x00;
+	switch (fill) {
+	case GL_RED:
+		pixR = 0xFF;
+		break;
+	case GL_GREEN:
+		pixG = 0xFF;
+		break;
+	default:
+		pixB = 0xFF;
+	}
+	glBindTexture(GL_TEXTURE_2D, txId);
+	uint8_t const block[4 * 4 * 4] = {
+		pixR, pixG, pixB, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+		0xFF, 0xFF, 0xFF, 0xFF, pixR, pixG, pixB, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+		0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, pixR, pixG, pixB, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+		0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, pixR, pixG, pixB, 0xFF
+	};
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 4, 4, 0, GL_RGBA, GL_UNSIGNED_BYTE, block);
+	filterClampBoilerplate();
+}
+
+/**
+ * Performs the work of creating the possible compressed and uncompressed test
+ * textures, all of the \c DebugTexture options.
+ */
+void createDebugTextures() {
+	assert(texture[0] == 0);
+	glGenTextures(DEBUG_TEXTURE_COUNT, texture);
+	// Failure placeholder
+	create4x4Invalid(texture[DEBUG_INVALID_RED], GL_RED);
+	// Red tests
+	create4x4BC3Vals(texture[DEBUG_4x4_RGBx4_RED], GL_RED);
+	createBC1(texture[DEBUG_4x4_BC1_RED], 31, 31, 0, 0, GL_RED);
+	createBC3(texture[DEBUG_4x4_BC3_RED], 31, 31, 0, 0, GL_RED);
+	create4x4BC4Vals(texture[DEBUG_4x4_RGBx8_RED], GL_RED);
+	createBC4(texture[DEBUG_4x4_BC4_RED], 255, 255, 0, 0);
+	createBC5(texture[DEBUG_4x4_BC5_RED], 255, 255, 0, 0, GL_RED);
+	// Green tests
+	create4x4BC3Vals(texture[DEBUG_4x4_RGBx4_GREEN], GL_GREEN);
+	createBC1(texture[DEBUG_4x4_BC1_GREEN], 63, 63, 0, 0, GL_GREEN);
+	createBC3(texture[DEBUG_4x4_BC3_GREEN], 63, 63, 0, 0, GL_GREEN);
+	create4x4BC4Vals(texture[DEBUG_4x4_RGBx8_GREEN], GL_GREEN);
+	createBC5(texture[DEBUG_4x4_BC5_GREEN], 255, 255, 0, 0, GL_GREEN);
+	// Blue tests
+	create4x4BC3Vals(texture[DEBUG_4x4_RGBx4_BLUE], GL_BLUE);
+	createBC1(texture[DEBUG_4x4_BC1_BLUE], 31, 31, 0, 0, GL_BLUE);
+	createBC3(texture[DEBUG_4x4_BC3_BLUE], 31, 31, 0, 0, GL_BLUE);
+}
+
+/**
+ * Cleans up the generated debug textures.
+ */
+void deleteDebugTextures() {
+	assert(texture[0] != 0);
+	glDeleteTextures(DEBUG_TEXTURE_COUNT, texture);
+	for (unsigned n = 0; n < DEBUG_TEXTURE_COUNT; n++) {
+		texture[n] = 0;
+	}
+}
+
+/**
+ * Returns a descriptive string for a debug texture.
+ *
+ * \param idx one of the \c DebugTexture entries
+ * \return a descriptive string
+ */
+const char* getDebugTextureType(unsigned const idx) {
+	switch (idx) {
+	case DEBUG_4x4_RGBx4_RED:
+		return "RGB red, 4-shades (BC3-style)";
+	case DEBUG_4x4_BC1_RED:
+		return "BC1 red";
+	case DEBUG_4x4_BC3_RED:
+		return "BC3 red";
+	case DEBUG_4x4_RGBx8_RED:
+		return "RGB red, 8-shades (BC4-style)";
+	case DEBUG_4x4_BC4_RED:
+		return "BC4 red";
+	case DEBUG_4x4_BC5_RED:
+		return "BC5 red";
+	case DEBUG_4x4_RGBx4_GREEN:
+		return "RGB green, 4-shades (BC3-style)";
+	case DEBUG_4x4_BC1_GREEN:
+		return "BC1 green";
+	case DEBUG_4x4_BC3_GREEN:
+		return "BC3 green";
+	case DEBUG_4x4_RGBx8_GREEN:
+		return "RGB green, 8-shades (BC4-style)";
+	case DEBUG_4x4_BC5_GREEN:
+		return "BC5 green";
+	case DEBUG_4x4_RGBx4_BLUE:
+		return "RGB blue, 4-shades (BC3-style)";
+	case DEBUG_4x4_BC1_BLUE:
+		return "BC1 blue";
+	case DEBUG_4x4_BC3_BLUE:
+		return "BC3 blue";
+	default:
+		return "Unknown";
+	}
+}
 }
 
 //*****************************************************************************/
 
-static Program prog; /**< Simple quad debug program. */
-static GLuint vaoId = 0; /**< VAO fullscreen textured quad.  */
-static GLuint vboId = 0; /**< VBO for \c vObjId quad. */
-
 void showDebugView(GLFWwindow* const window, ContextVersion const glVers) {
+	Program prog;
 	if (glVers > VERSION_2_0) {
 		createVertFragShaders(vertShaderTexture150, fragShaderTexture150, prog);
 	} else {
 		createVertFragShaders(vertShaderTexture110, fragShaderTexture110, prog);
 	}
-	createTexturedQuad(glVers, vaoId, vboId);
+	GLuint vaoId = 0;
+	GLuint vboId = 0;
+	createTexturedQuad(glVers, vaoId, vboId, true);
+	createDebugTextures();
+	unsigned showingTxIdx = DEBUG_4x4_RGBx4_RED;
+	unsigned showingTicks = 0;
 	while (!glfwWindowShouldClose(window)) {
 		int fbW, fbH;
 		glfwGetFramebufferSize(window, &fbW, &fbH);
 		glViewport(0, 0, fbW, fbH);
 		glClearColor(0.3f, 0.4f, 0.8f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT);
+		if (showingTicks == 0) {
+			showingTicks = 120;
+			showingTxIdx++;
+			if (showingTxIdx >= DEBUG_TEXTURE_COUNT) {
+				showingTxIdx = DEBUG_4x4_RGBx4_RED;
+			}
+			glBindTexture(GL_TEXTURE_2D, texture[showingTxIdx]);
+			if (doesBoundTextureHaveContent()) {
+				printf("Showing texture: %s\n", getDebugTextureType(showingTxIdx));
+			} else {
+				glBindTexture(GL_TEXTURE_2D, texture[DEBUG_INVALID_RED]);
+				if (doesBoundTextureHaveContent()) {
+					printf("Fallback for: %s\n", getDebugTextureType(showingTxIdx));
+				} else {
+					printf("Total texture failure\n");
+				}
+			}
+		} else {
+			showingTicks--;
+		}
+		glDrawArrays(GL_TRIANGLES, 0, 6);
 		glfwSwapBuffers(window);
 		glfwPollEvents();
 	}
+	deleteDebugTextures();
+	deleteTexturedQuad(glVers, vaoId, vboId);
+	deleteVertFragShaders(prog);
 }

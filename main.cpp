@@ -424,7 +424,7 @@ void computeTest() {
 
 //**************************** Framebuffer Version ****************************/
 
-Program prog; /**< Simple quad drawing program. */
+static Program prog; /**< Simple quad drawing program. */
 
 GLuint fbTxId = 0; /**< Texture ID backing \c fbufId (RGBA). */
 GLuint fbufId = 0; /**< Framebuffer ID. */
@@ -480,8 +480,8 @@ void deleteFramebuffer() {
 	fbTxId = 0;
 }
 
-GLuint vaoId = 0; /**< VAO fullscreen textured quad.  */
-GLuint vboId = 0; /**< VBO for \c vObjId quad. */
+static GLuint vaoId = 0; /**< VAO fullscreen textured quad.  */
+static GLuint vboId = 0; /**< VBO for \c vObjId quad. */
 
 void deleteTexturedQuad() {
 	glDeleteBuffers(1, &vboId);
@@ -710,7 +710,12 @@ int main(int argc, char* argv[]) {
 		}
 	}
 
-	GLFWwindow* window = createGlfwContext(SWEEP_BC4, SWEEP_BC4, mode == MODE_DEBUG_VIEW);
+	GLFWwindow* window;
+	if (mode == MODE_DEBUG_VIEW) {
+		window = createGlfwContext(SWEEP_BC1, SWEEP_BC1, true);
+	} else {
+		window = createGlfwContext(SWEEP_BC4, SWEEP_BC4);
+	}
 	switch (mode) {
 	case MODE_INFO:
 		showInfo(glVers);

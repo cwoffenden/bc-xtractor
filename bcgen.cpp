@@ -5,6 +5,7 @@
 
 #include "glcommon.h"
 
+namespace /*anonymous*/ {
 //***************************** Block Containers ******************************/
 
 /**
@@ -201,7 +202,7 @@ static_assert(sizeof(BC5Block) == 16, "BC5 block should be 16 bytes");
  * \param[in] fill choice of \c GL_RED, \c GL_GREEN or \c GL_BLUE channel (or \c GL_RGB for all)
  * \param[out] block address of the block to fill
  */
-static void fillBC1Block(unsigned const val0, unsigned const val1, GLenum const fill, BC1Block* _Nonnull const block) {
+void fillBC1Block(unsigned const val0, unsigned const val1, GLenum const fill, BC1Block* _Nonnull const block) {
 	assert(block);
 	new(block) BC1Block(
 		0x00, 0x00,
@@ -240,7 +241,7 @@ static void fillBC1Block(unsigned const val0, unsigned const val1, GLenum const 
  * \param[in] val1 second endpoint
  * \param[out] block address of the block to fill
  */
-static void fillBC4Block(unsigned const val0, unsigned const val1, BC4Block* _Nonnull const block) {
+void fillBC4Block(unsigned const val0, unsigned const val1, BC4Block* _Nonnull const block) {
 	assert(block);
 	new(block) BC4Block(
 		0x00, 0x00,
@@ -249,6 +250,7 @@ static void fillBC4Block(unsigned const val0, unsigned const val1, BC4Block* _No
 	);
 	block->endpt[0] = val0;
 	block->endpt[1] = val1;
+}
 }
 
 //******************************** Public API *********************************/

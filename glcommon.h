@@ -112,7 +112,7 @@ GLuint compileShaderSource(GLenum type, const GLchar* _Nonnull text);
 bool createVertFragShaders(const GLchar* _Nonnull vertSrc, const GLchar* _Nonnull fragSrc, Program& prog);
 
 /**
- * Clean-up for \c #createVertFragShaders().
+ * Cleanup for \c #createVertFragShaders().
  *
  * \param[in,out] prog program, vertex and fragment IDs
  */
@@ -122,7 +122,12 @@ void deleteVertFragShaders(Program& prog);
  * Creates a fullscreen textured quad. After calling the VAO \a vaoId and/or its
  * VBO \a vboId remain bound (to ease drawing, since this is the only geometry).
  */
-void createTexturedQuad(ContextVersion glVers, GLuint& vaoId, GLuint& vboId);
+void createTexturedQuad(ContextVersion glVers, GLuint& vaoId, GLuint& vboId, bool flip = false);
+
+/**
+ * Cleanup for \c createTexturedQuad().
+ */
+void deleteTexturedQuad(ContextVersion glVers, GLuint& vaoId, GLuint& vboId);
 
 /**
  * Filter to nearest and clamp to edge the current bound texture.
