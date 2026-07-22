@@ -160,3 +160,14 @@
 #endif
 #include <stdint.h>
 #include <cstddef>
+
+/*
+ * Endianness (we're only interested in capturing BE, assuming LE otherwise).
+ */
+#if defined(__linux__) || __has_include(<endian.h>)
+#include <endian.h>
+#else
+#if defined(__APPLE__)
+#include <machine/endian.h>
+#endif
+#endif
