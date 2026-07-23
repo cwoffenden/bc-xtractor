@@ -173,13 +173,9 @@ void create4x4LATCVals(GLuint const txId, GLenum const fill) {
 }
 
 /**
- * Placeholder texture to denote failure (ye olde broken image, 16x16). Unlike
- * the other RGB-only textures, this is RGBA which should ensure universal
+ * Placeholder texture to denote failure (16x16 Netscape-style broken image).
+ * Unlike most of the other this is RGBA, which should ensure universal
  * compatibility.
- *
- * \note This is upside down, as in, it's the right way up but upside down for
- * GL. All the test textures are orientated for extracting, not display, and an
- * upside down shader is used to draw them.
  *
  * \param[in] txId pre-generated texture ID to use
  */
