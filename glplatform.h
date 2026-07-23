@@ -67,6 +67,25 @@
 #define GL_COMPRESSED_LUMINANCE_ALPHA_LATC2_EXT 0x8C72
 #endif
 #endif
+/*
+ * A variant on LATC2.
+ */
+#ifndef GL_ATI_texture_compression_3dc
+#ifndef GL_COMPRESSED_LUMINANCE_ALPHA_3DC_ATI
+#define GL_COMPRESSED_LUMINANCE_ALPHA_3DC_ATI 0x8837
+#endif
+#endif
+/*
+ * Uncompressed fallbacks for RGTC (also known as 'GL_EXT_texture_rg').
+ */
+#ifndef GL_ARB_texture_rg
+#ifndef GL_RED
+#define GL_RED 0x1903
+#endif
+#ifndef GL_RG
+#define GL_RG 0x8227
+#endif
+#endif
 
 #ifndef GL_RGBA32F
 #define GL_RGBA32F GL_RGBA32F_ARB

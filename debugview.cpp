@@ -4,6 +4,7 @@
 #include <cstdio>
 
 #include "bcgen.h"
+#include "unsupportedimage.h"
 
 namespace /*anonymous*/ {
 /**
@@ -29,9 +30,11 @@ enum DebugTexture {
 	DEBUG_4x4_RGBAx8_LUMA,  /**<  4x4 8-bit RGBA texture with an luminance-only 4-colour pattern. */
 	DEBUG_4x4_LATC1_LUMA,   /**<  LATC1 approximating <tt>DEBUG_4x4_RGBAx8_LUMA</tt>. */
 	DEBUG_4x4_LATC2_LUMA,   /**<  LATC2 approximating <tt>DEBUG_4x4_RGBAx8_LUMA</tt>. */
+	DEBUG_4x4_3DC_LUMA,
 	DEBUG_4x4_RGBAx8_ALPHA, /**<  4x4 8-bit RGBA texture with an alpha-only 4-colour pattern. */
 	DEBUG_4x4_BC3_ALPHA,    /**<  BC3 approximating <tt>DEBUG_4x4_RGBAx8_ALPHA</tt>. */
 	DEBUG_4x4_LATC2_ALPHA,  /**<  LATC2 approximating <tt>DEBUG_4x4_RGBAx8_ALPHA</tt>. */
+	DEBUG_4x4_3DC_ALPHA,
 	DEBUG_TEXTURE_COUNT     /**<  Number of debug textures. */
 };
 
