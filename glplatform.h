@@ -33,24 +33,41 @@
 
 #include <GLFW/glfw3.h>
 
+#ifndef GL_EXT_texture_compression_s3tc
 #ifndef GL_COMPRESSED_RGB_S3TC_DXT1_EXT
 #define GL_COMPRESSED_RGB_S3TC_DXT1_EXT 0x83F0
 #endif
 #ifndef GL_COMPRESSED_RGBA_S3TC_DXT5_EXT
 #define GL_COMPRESSED_RGBA_S3TC_DXT5_EXT 0x83F3
 #endif
+#endif
+/*
+ * Note for RGTC, it's also known as 'EXT_texture_compression_rgtc', (not ARB)
+ * and the RG variant is named 'GL_COMPRESSED_RED_GREEN_RGTC2_EXT' (with the
+ * same value).
+ */
+#ifndef GL_ARB_texture_compression_rgtc
 #ifndef GL_COMPRESSED_RED_RGTC1
 #define GL_COMPRESSED_RED_RGTC1 0x8DBB
 #endif
 #ifndef GL_COMPRESSED_RG_RGTC2
 #define GL_COMPRESSED_RG_RGTC2 0x8DBD
 #endif
+#endif
+/*
+ * Precursor to RGTC, also known as 'NV_texture_compression_latc' with an NV
+ * postfix on the tokens (with the same values). Luminance support was removed
+ * from GL3.1 onwards, so this is here for legacy testing.
+ */
+#ifndef GL_EXT_texture_compression_latc
 #ifndef GL_COMPRESSED_LUMINANCE_LATC1_EXT
 #define GL_COMPRESSED_LUMINANCE_LATC1_EXT 0x8C70
 #endif
 #ifndef GL_COMPRESSED_LUMINANCE_ALPHA_LATC2_EXT
 #define GL_COMPRESSED_LUMINANCE_ALPHA_LATC2_EXT 0x8C72
 #endif
+#endif
+
 #ifndef GL_RGBA32F
 #define GL_RGBA32F GL_RGBA32F_ARB
 #endif
