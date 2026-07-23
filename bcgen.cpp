@@ -328,7 +328,7 @@ unsigned createBC3(GLuint const txId, unsigned const min0, unsigned const max0, 
 					fillBC1Block(0xFFFF, 0xFFFF, GL_RGB, &next->color);
 				} else {
 					// Alpha block set to solid
-					fillBC4Block(0xFF, 0xFF, &next->alpha);
+					memset(&next->alpha, 0xFF, sizeof(BC4Block));
 					// Colour block with endpoints
 					fillBC1Block(gridY, gridX, fill, &next->color);
 				}
@@ -336,7 +336,7 @@ unsigned createBC3(GLuint const txId, unsigned const min0, unsigned const max0, 
 			}
 		}
 		glBindTexture(GL_TEXTURE_2D, txId);
-		glCompressedTexImage2D(GL_TEXTURE_2D, 0, GL_COMPRESSED_RGBA_S3TC_DXT3_EXT,
+		glCompressedTexImage2D(GL_TEXTURE_2D, 0, GL_COMPRESSED_RGBA_S3TC_DXT5_EXT,
 			GLsizei(gridW * 4), GLsizei(gridH * 4), 0,
 				GLsizei(count * sizeof(BC3Block)), blocks);
 		filterClampBoilerplate();
