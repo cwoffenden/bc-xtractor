@@ -349,7 +349,7 @@ unsigned createBC3(GLuint const txId, unsigned const min0, unsigned const max0, 
 	return 0;
 }
 
-unsigned createBC4(GLuint const txId, unsigned const min0, unsigned const max0, unsigned const min1, unsigned const max1) {
+unsigned createBC4(GLuint const txId, unsigned const min0, unsigned const max0, unsigned const min1, unsigned const max1, GLenum const format) {
 	assert(txId);
 	assert(min0 < 256 && max0 < 256 && min0 <= max0);
 	assert(min1 < 256 && max1 < 256 && min1 <= max1);
@@ -365,7 +365,7 @@ unsigned createBC4(GLuint const txId, unsigned const min0, unsigned const max0, 
 			}
 		}
 		glBindTexture(GL_TEXTURE_2D, txId);
-		glCompressedTexImage2D(GL_TEXTURE_2D, 0, GL_COMPRESSED_RED_RGTC1,
+		glCompressedTexImage2D(GL_TEXTURE_2D, 0, format,
 			GLsizei(gridW * 4), GLsizei(gridH * 4), 0,
 				GLsizei(count * sizeof(BC4Block)), blocks);
 		filterClampBoilerplate();
@@ -378,10 +378,11 @@ unsigned createBC4(GLuint const txId, unsigned const min0, unsigned const max0, 
 	return 0;
 }
 
-unsigned createBC5(GLuint const txId, unsigned const min0, unsigned const max0, unsigned const min1, unsigned const max1, GLenum const fill) {
+unsigned createBC5(GLuint const txId, unsigned const min0, unsigned const max0, unsigned const min1, unsigned const max1, GLenum const fill, GLenum const format) {
 	assert(txId);
 	assert(min0 < 256 && max0 < 256 && min0 <= max0);
 	assert(min1 < 256 && max1 < 256 && min1 <= max1);
+	assert(fill == GL_RED || fill == GL_GREEN || fill == GL_LUMINANCE || fill == GL_ALPHA);
 	unsigned gridW = (max1 + 1) - min1;
 	unsigned gridH = (max0 + 1) - min0;
 	unsigned count = gridW * gridH;
@@ -390,7 +391,7 @@ unsigned createBC5(GLuint const txId, unsigned const min0, unsigned const max0, 
 		BC5Block* next = blocks;
 		for(unsigned gridY = min0; gridY <= max0; gridY++) {
 			for(unsigned gridX = min1; gridX <= max1; gridX++) {
-				if (fill == GL_RED) {
+				if (fill == GL_RED || fill == GL_LUMINANCE) {
 					// Red block to endpoints
 					fillBC4Block(gridY, gridX, &next->red);
 					// Zero unused green block
@@ -405,7 +406,7 @@ unsigned createBC5(GLuint const txId, unsigned const min0, unsigned const max0, 
 			}
 		}
 		glBindTexture(GL_TEXTURE_2D, txId);
-		glCompressedTexImage2D(GL_TEXTURE_2D, 0, GL_COMPRESSED_RG_RGTC2,
+		glCompressedTexImage2D(GL_TEXTURE_2D, 0, format,
 			GLsizei(gridW * 4), GLsizei(gridH * 4), 0,
 				GLsizei(count * sizeof(BC5Block)), blocks);
 		filterClampBoilerplate();
